@@ -87,6 +87,8 @@ std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double
     peak_detector_offline detector(sampling_rate);
     detector.detect(ecg_signal, len, peak_signal.data(), filt_signal.data(), threshold_signal.data(), &peak_indexes);
 
+    for (ssize_t i = 0; i < peak_indexes.size(); ++i)
+        peak_indexes[i] /= 2;
     return peak_indexes;
 }
 
