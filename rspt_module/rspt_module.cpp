@@ -81,9 +81,12 @@ std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double
     std::cout << "len: " << len << std::endl;
 
     std::vector<double> ecg_signal(len);
-    for (unsigned int i = 0; i < len; ++i)
-        ecg_signal[i] = static_cast<double*>(buf.ptr)[i];
- 
+    char* base_ptr = static_cast<char*>(buf.ptr);
+    for (unsigned int i = 0; i < len; ++i) {
+        double* val_ptr = reinterpret_cast<double*>(base_ptr + i * buf.strides[0]);
+        ecg_signal[i] = *val_ptr;
+    }
+
     // work bufferek
     std::vector<double> peak_signal(len);
     std::vector<double> filt_signal(len);
@@ -95,7 +98,6 @@ std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double
 
     return peak_indexes;
 }
-
 
 // modul exportálás
 PYBIND11_MODULE(rspt_module, m) {
