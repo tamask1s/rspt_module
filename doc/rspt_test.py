@@ -13,7 +13,7 @@ ecg_signal = record.p_signal[:, 0]
 sampling_rate = record.fs
 
 print("Detecting. sampling_rate:", sampling_rate)
-peak_indexes = np.array(rspt_module.detect_peaks(ecg_signal, sampling_rate), dtype=int)
+peak_indexes = rspt_module.detect_peaks(ecg_signal, sampling_rate)
 print(f"{len(peak_indexes)} peaks detected.")
 print("First 10 peak indexes:", peak_indexes[:10])
 
