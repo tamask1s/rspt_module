@@ -10,7 +10,7 @@ Python module for rspt's peak detection algorithm, tested with a few ECG signals
 pip install git+https://github.com/tamask1s/rspt_module.git
 ```
 
-![example python file](doc/rspt_test.py)
+[doc/rspt_test.py](doc/rspt_test.py)
 
 ```python
 import numpy as np
@@ -28,7 +28,7 @@ ecg_signal = record.p_signal[:, 0]
 sampling_rate = record.fs
 
 print("Detecting. sampling_rate:", sampling_rate)
-peak_indexes = np.array(rspt_module.detect_peaks(ecg_signal, sampling_rate), dtype=int)
+peak_indexes = rspt_module.detect_peaks(ecg_signal, sampling_rate)
 print(f"{len(peak_indexes)} peaks detected.")
 print("First 10 peak indexes:", peak_indexes[:10])
 
@@ -41,4 +41,5 @@ plt.title('ECG signal and detected peaks')
 plt.legend()
 plt.grid(True)
 plt.show()
+
  ```
