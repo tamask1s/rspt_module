@@ -75,8 +75,14 @@ py::array_t<double> square_numpy(py::array_t<double> array) {
 
 std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double sampling_rate) {
     py::buffer_info buf = ecg_signal_np.request();
-    double* ecg_signal = static_cast<double*>(buf.ptr);
     unsigned int len = buf.shape[0];
+
+    std::cout << "stride: " << buf.strides[0] << " bytes" << std::endl;
+    std::cout << "len: " << len << std::endl;
+
+    std::vector<double> ecg_signal(len);
+    for (unsigned int i = 0; i < len; ++i)
+        ecg_signal[i] = static_cast<double*>(buf.ptr)[i];
 
     // work bufferek
     std::vector<double> peak_signal(len);
@@ -85,10 +91,8 @@ std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double
     std::vector<unsigned int> peak_indexes;
 
     peak_detector_offline detector(sampling_rate);
-    detector.detect(ecg_signal, len, peak_signal.data(), filt_signal.data(), threshold_signal.data(), &peak_indexes);
+    detector.detect(ecg_signal.data(), len, peak_signal.data(), filt_signal.data(), threshold_signal.data(), &peak_indexes);
 
-    for (ssize_t i = 0; i < peak_indexes.size(); ++i)
-        peak_indexes[i] /= 2;
     return peak_indexes;
 }
 
