@@ -73,38 +73,6 @@ py::array_t<double> square_numpy(py::array_t<double> array) {
     return result;
 }
 
-py::list detect_peaks(py::array_t<double> ecg_signal_np, double sampling_rate, double marker_val = 1.0) {
-    // Jel buffer
-    auto ecg_signal_buf = ecg_signal_np.unchecked<1>();
-    unsigned int len = ecg_signal_buf.shape(0);
-
-    // Work bufferek
-    std::vector<double> peak_signal(len, 0.0);
-    std::vector<double> filt_signal(len, 0.0);
-    std::vector<double> threshold_signal(len, 0.0);
-    std::vector<unsigned int> peak_indexes;
-
-    // Detektor példány
-    peak_detector_offline detector(sampling_rate, marker_val);
-
-    // Detektálás
-    detector.detect(
-        const_cast<double*>(ecg_signal_buf.data(0)), // bemenet
-        len,
-        peak_signal.data(),
-        filt_signal.data(),
-        threshold_signal.data(),
-        &peak_indexes // kimenet
-    );
-
-    // Peak indexek visszaadása Python listába
-    py::list result;
-    for (auto idx : peak_indexes)
-        result.append(idx);
-
-    return result;
-}
-
 std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double sampling_rate) {
     py::buffer_info buf = ecg_signal_np.request();
     double* ecg_signal = static_cast<double*>(buf.ptr);
@@ -130,5 +98,5 @@ PYBIND11_MODULE(rspt_module, m) {
     m.def("square_inplace_numpy", &square_inplace_numpy, "In-place squaring of a numpy 2D array");
     m.def("square_list", &square_list, "Squaring of a Python 2D list, returning a new list");
     m.def("square_numpy", &square_numpy, "Squaring of a numpy 2D array, returning a new array");
-    m.def("detect_peaks", &detect_peaks, "Detect ECG peaks",                          py::arg("ecg_signal"), py::arg("sampling_rate"));
+    m.def("detect_peaks", &detect_peaks, "Detect ECG peaks", py::arg("ecg_signal"), py::arg("sampling_rate"));
 }
