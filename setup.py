@@ -2,8 +2,9 @@ from skbuild import setup
 
 setup(
     name="rspt_module",
-    version="0.1.0",
-    description="C++ Python modul 2D tömb négyzetre emeléshez",
-    author="Te",
+    version="0.1",
+    author="tamask1s",
+    description="2D array squaring functions in C++",
     packages=["rspt_module"],
+    python_requires=">=3.6",
 )
