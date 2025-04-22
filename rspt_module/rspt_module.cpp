@@ -1,8 +1,25 @@
-#include "peak_detector.h"
 #include <vector>
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>  // hogy tudjunk std::vector-t és list-eket kezelni
+
+#include <cstdio>
+#include <iostream>
+#include <stdlib.h>
+#include <string.h>
+#include <string>
+#include <map>
+#include <vector>
+#include <locale>
+#include <chrono>
+#include <deque>
+using namespace std;
+
+
+#include "filter.h"
+#include "iir_filter_opt.h"
+#include "peak_detector.h"
+
 
 namespace py = pybind11;
 

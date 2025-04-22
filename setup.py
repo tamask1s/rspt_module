@@ -11,7 +11,8 @@ except ImportError:
 module = Extension(
     'rspt_module',
     sources=['rspt_module/rspt_module.cpp',
-             'rspt_module/iir_filter_design.cpp'],
+             'lib_filter/rspt_module/iir_filter_design.cpp',
+             'lib_filter/rspt_module/iir_filter.cpp'],
     include_dirs=[numpy.get_include(), pybind11_include],
     language='c++'
 )
