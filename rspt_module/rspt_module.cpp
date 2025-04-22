@@ -83,7 +83,7 @@ std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double
     std::vector<double> ecg_signal(len);
     for (unsigned int i = 0; i < len; ++i)
         ecg_signal[i] = static_cast<double*>(buf.ptr)[i];
-
+ 
     // work bufferek
     std::vector<double> peak_signal(len);
     std::vector<double> filt_signal(len);
