@@ -73,36 +73,21 @@ py::array_t<double> square_numpy(py::array_t<double> array) {
     return result;
 }
 
-py::list detect_peaks(py::array_t<double> ecg_signal_np, double sampling_rate, double marker_val = 1.0) {
-    // Jel buffer
-    auto ecg_signal_buf = ecg_signal_np.unchecked<1>();
-    unsigned int len = ecg_signal_buf.shape(0);
+std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double sampling_rate) {
+    py::buffer_info buf = ecg_signal_np.request();
+    double* ecg_signal = static_cast<double*>(buf.ptr);
+    unsigned int len = buf.shape[0];
 
-    // Work bufferek
-    std::vector<double> peak_signal(len, 0.0);
-    std::vector<double> filt_signal(len, 0.0);
-    std::vector<double> threshold_signal(len, 0.0);
+    // work bufferek
+    std::vector<double> peak_signal(len);
+    std::vector<double> filt_signal(len);
+    std::vector<double> threshold_signal(len);
     std::vector<unsigned int> peak_indexes;
 
-    // Detektor példány
-    peak_detector_offline detector(sampling_rate, marker_val);
+    peak_detector_offline detector(sampling_rate);
+    detector.detect(ecg_signal, len, peak_signal.data(), filt_signal.data(), threshold_signal.data(), &peak_indexes);
 
-    // Detektálás
-    detector.detect(
-        const_cast<double*>(ecg_signal_buf.data(0)), // bemenet
-        len,
-        peak_signal.data(),
-        filt_signal.data(),
-        threshold_signal.data(),
-        &peak_indexes // kimenet
-    );
-
-    // Peak indexek visszaadása Python listába
-    py::list result;
-    for (auto idx : peak_indexes)
-        result.append(idx);
-
-    return result;
+    return peak_indexes;
 }
 
 
