@@ -251,7 +251,7 @@ public:
         : sampling_rate_(sampling_rate),
           marker_val_(marker_val),
           peak_attenuation_(1.0 / (1.0 + previous_peak_reference_attenuation_ / sampling_rate)),
-          nr_slope_samples_((50.0 * sampling_rate) / 1000.0)
+          nr_slope_samples_((100.0 * sampling_rate) / 1000.0)
     {
         create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 1, sampling_rate, 15, 25);
         create_filter_iir(integrative_filter_.d, integrative_filter_.n, butterworth, low_pass, 1, sampling_rate, 3, 0);
@@ -367,12 +367,13 @@ public:
                 peak_signal[i] = 0;
                 ++nr_peaks;
             }
-        for (unsigned int i = nr_slope_samples_; i < len - nr_slope_samples_; ++i)
+        const int radius = (10.0 * sampling_rate_) / 1000.0;
+        for (unsigned int i = radius; i < len - radius; ++i)
             if (peak_signal[i])
             {
                 unsigned int maxindx = 0, minindx = 0;
                 double maxval = -2000000, minval = 2000000;
-                for (int j = -nr_slope_samples_; j < nr_slope_samples_; ++j)
+                for (int j = -radius; j < radius; ++j)
                 {
                     if (maxval < ecg_signal[i + j] - baseline[i + j])
                     {
