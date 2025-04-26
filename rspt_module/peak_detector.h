@@ -401,7 +401,6 @@ public:
                 if (peak_signal[i])
                     (*peak_indexes)[nr_peaks++] = i;
         }
-        memcpy(threshold_signal, baseline, len);
         delete[] baseline;
     }
 };
