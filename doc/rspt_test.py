@@ -4,10 +4,10 @@ import rspt_module
 import matplotlib.pyplot as plt
 
 print("opening")
-#record = wfdb.rdrecord('100', pn_dir='mitdb')
+record = wfdb.rdrecord('107', pn_dir='mitdb')
 #record = wfdb.rdrecord('chf07', pn_dir='chfdb', channels=[0], sampto=650000)
 #record = wfdb.rdrecord('e0103', pn_dir='edb', channels=[0], sampto=650000)
-record = wfdb.rdrecord('200', pn_dir='mitdb')
+#record = wfdb.rdrecord('200', pn_dir='mitdb')
 print("opened")
 ecg_signal = record.p_signal[:, 0]
 sampling_rate = record.fs

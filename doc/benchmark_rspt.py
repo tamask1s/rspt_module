@@ -6,8 +6,12 @@ def benchmark_record(record_name, tolerance=0.05):
     print(f"\nBenchmarking record: {record_name}")
 
     # Rekord és annotáció beolvasása PhysioNet-ről
-    record = wfdb.rdrecord(record_name, pn_dir='mitdb')
-    annotation = wfdb.rdann(record_name, 'atr', pn_dir='mitdb')
+    record_path = "/media/sf_SharedFolder/QT/mit-bih-arrhythmia-database-1.0.0/"
+
+    record = wfdb.rdrecord(record_path + record_name)
+    annotation = wfdb.rdann(record_path + record_name, 'atr')
+#    record = wfdb.rdrecord(record_name, pn_dir='mitdb')
+#    annotation = wfdb.rdann(record_name, 'atr', pn_dir='mitdb')
 
     fs = record.fs
     signal = record.p_signal[:, 0]  # csak az első csatorna
@@ -60,6 +64,8 @@ def benchmark_record(record_name, tolerance=0.05):
 if __name__ == "__main__":
     records = ['100', '101', '103', '105', '111', '112', '113', '115', '117', '118', '119', '121', '122', '200', '202', '209']    # ide még bővíthetsz
 
+    sensitivities = []
+    ppvs = []
     results = []
     for rec in records:
         res = benchmark_record(rec)
@@ -68,3 +74,12 @@ if __name__ == "__main__":
     print("\n=== Summary ===")
     for r in results:
         print(f"{r['record']}: Sensitivity={r['Sensitivity']:.3f}, PPV={r['PPV']:.3f}")
+        sensitivities.append(r['Sensitivity'])
+        ppvs.append(r['PPV'])
+
+    # Átlagos metrikák
+    avg_sensitivity = np.mean(sensitivities)
+    avg_ppv = np.mean(ppvs)
+
+    print(f"Average Sensitivity: {avg_sensitivity * 100:.3f}%")
+    print(f"Average PPV: {avg_ppv * 100:.3f}%")

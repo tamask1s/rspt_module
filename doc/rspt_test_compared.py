@@ -4,8 +4,11 @@ import rspt_module
 import matplotlib.pyplot as plt
 
 print("opening")
-record = wfdb.rdrecord('107', pn_dir='mitdb')
-annotation = wfdb.rdann('107', 'atr', pn_dir='mitdb')
+record_path = "/media/sf_SharedFolder/QT/mit-bih-arrhythmia-database-1.0.0/105"
+record = wfdb.rdrecord(record_path)
+annotation = wfdb.rdann(record_path, 'atr')
+#record = wfdb.rdrecord('101', pn_dir='mitdb')
+#annotation = wfdb.rdann('101', 'atr', pn_dir='mitdb')
 print("opened")
 
 ecg_signal = record.p_signal[:, 0]
