@@ -231,7 +231,7 @@ class peak_detector_offline
 
     const double sampling_rate_;
     const double marker_val_;
-    //const double previous_peak_reference_ratio_ = 0.5;
+    static constexpr double previous_peak_reference_ratio_ = 0.35;
     const double previous_peak_reference_attenuation_ = 150;
     const double peak_attenuation_;
     const double threshold_ratio_ = 1.7;
@@ -259,9 +259,8 @@ public:
         create_filter_iir(threshold_filter_.d, threshold_filter_.n, butterworth, low_pass, 1, sampling_rate, 0.55, 0);
     }
 
-    inline void detect(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = 0.5)
+    inline void detect(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_)
     {
-        const double previous_peak_reference_ratio_ = previous_peak_reference_ratio;
         bandpass_filter_.init_history_values(ecg_signal[0], sampling_rate_);
         baseline_filter_.init_history_values(ecg_signal[0], sampling_rate_);
 
@@ -287,7 +286,7 @@ public:
         {
             if (searching_for_peaks_ && (filt_signal[i] > threshold_signal[i] * threshold_ratio_) && (previous_sig_val_ > filt_signal[i]))
             {
-                if ((previous_peak_amplitude_ == 0) || (previous_sig_val_ > previous_peak_amplitude_ * previous_peak_reference_ratio_))
+                if ((previous_peak_amplitude_ == 0) || (previous_sig_val_ > previous_peak_amplitude_ * previous_peak_reference_ratio))
                 {
                     previous_peak_amplitude_ = previous_sig_val_;
                     samples_after_peak_count_ = 1;
@@ -379,7 +378,7 @@ public:
         delete[] baseline;
     }
 
-    inline void detect9985_9978_9982(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = 0.5)
+    /*inline void detect9985_9978_9982(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = 0.5)
     {
         const double previous_peak_reference_ratio_ = previous_peak_reference_ratio;
         bandpass_filter_.init_history_values(ecg_signal[0], sampling_rate_);
@@ -499,7 +498,7 @@ public:
         delete[] baseline;
         if (!r_reference_value)
             detect(ecg_signal, len, peak_signal, filt_signal, threshold_signal, peak_indexes, average_r, 0.2);
-    }
+    }*/
 
     /*inline void detect_fw(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal)
     {
