@@ -1,8 +1,15 @@
 import wfdb
+import time
 import numpy as np
 from rspt_module import detect_peaks
 
+start_time2 = time.perf_counter()
+end_time2 = time.perf_counter()
+elapsed_ms2 = (end_time2 - start_time2) * 1000
+
 def benchmark_record(record_name, tolerance=0.05):
+    global elapsed_ms2
+
     record_path = "/media/sf_SharedFolder/QT/mit-bih-arrhythmia-database-1.0.0/"
     record = wfdb.rdrecord(record_path + record_name)
     annotation = wfdb.rdann(record_path + record_name, 'atr')
@@ -10,8 +17,10 @@ def benchmark_record(record_name, tolerance=0.05):
     fs = record.fs
     signal = record.p_signal[:, 0]
 
+    start_time2 = time.perf_counter()
     detected_peaks = detect_peaks(signal, fs)
-    detected_peaks = np.array(detected_peaks)
+    end_time2 = time.perf_counter()
+    elapsed_ms2 = elapsed_ms2 + (end_time2 - start_time2) * 1000
 
     annot_r_peaks = annotation.sample[np.isin(annotation.symbol, ['N', 'L', 'R', 'V', 'A', 'F', 'j', 'E', 'e', 'a', 'J', 'S'])]
 
@@ -37,11 +46,11 @@ def benchmark_record(record_name, tolerance=0.05):
     sensitivity = TP / (TP + FN) if (TP + FN) > 0 else 0
     ppv = TP / (TP + FP) if (TP + FP) > 0 else 0
 
-    print(f"  True Positives (TP): {TP}")
-    print(f"  False Positives (FP): {FP}")
-    print(f"  False Negatives (FN): {FN}")
-    print(f"  Sensitivity (Recall): {sensitivity * 100.0:.3f}")
-    print(f"  Positive Predictive Value (PPV): {ppv * 100.0:.3f}")
+    #print(f"  True Positives (TP): {TP}")
+    #print(f"  False Positives (FP): {FP}")
+    #print(f"  False Negatives (FN): {FN}")
+    #print(f"  Sensitivity (Recall): {sensitivity * 100.0:.3f}")
+    #print(f"  Positive Predictive Value (PPV): {ppv * 100.0:.3f}")
 
     return {
         'record': record_name,
@@ -60,11 +69,12 @@ if __name__ == "__main__":
     sensitivities = []
     ppvs = []
     results = []
+    start_time = time.perf_counter()
     for rec in records:
         res = benchmark_record(rec)
         results.append(res)
-
-    print("\n=== Summary ===")
+    end_time = time.perf_counter()
+    elapsed_ms = (end_time - start_time) * 1000
     for r in results:
         print(f"{r['record']}: Sensitivity={r['Sensitivity']*100.0:.3f}, PPV={r['PPV']*100.0:.3f}")
         sensitivities.append((r['record'], r['Sensitivity']))
@@ -90,3 +100,5 @@ if __name__ == "__main__":
     print(f"Average (100% means no FP) PPV: {avg_ppv * 100:.3f}%")
     print(f"Average SPPV: {(avg_ppv + avg_sensitivity) * 50:.3f}%")
     
+    print(f"Futási idő: {elapsed_ms:.3f} ms")
+    print(f"Futási idő: {elapsed_ms2:.3f} ms")
