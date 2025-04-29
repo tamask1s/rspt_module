@@ -4,7 +4,7 @@ import rspt_module
 import matplotlib.pyplot as plt
 
 print("opening")
-record_path = "/media/sf_SharedFolder/QT/mit-bih-arrhythmia-database-1.0.0/105"
+record_path = "/media/sf_SharedFolder/QT/mit-bih-arrhythmia-database-1.0.0/221"
 record = wfdb.rdrecord(record_path)
 annotation = wfdb.rdann(record_path, 'atr')
 #record = wfdb.rdrecord('101', pn_dir='mitdb')
@@ -20,7 +20,7 @@ print(f"{len(peak_indexes)} peaks detected.")
 print("First 10 peak indexes:", peak_indexes[:10])
 
 # Annotációból az R csúcsok
-annot_r_peaks = annotation.sample[np.isin(annotation.symbol, ['N', 'L', 'R', 'A', 'V'])]
+annot_r_peaks = annotation.sample[np.isin(annotation.symbol, ['N', 'L', 'R', 'V', 'A', 'F', 'j', 'E', 'e', 'a', 'J', 'S'])]
 
 # TP / FP / FN meghatározása
 tolerance_samples = int(0.05 * sampling_rate)

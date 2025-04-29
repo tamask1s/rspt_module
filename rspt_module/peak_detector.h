@@ -221,7 +221,7 @@ class peak_detector_offline
     iir_filter_2nd_order bandpass_filter_;
     iir_filter_1st_order integrative_filter_;
     iir_filter_1st_order baseline_filter_;
-    iir_filter_2nd_order threshold_filter_;
+    iir_filter_1st_order threshold_filter_;
 
     double previous_peak_amplitude_ = 0;
     double previous_sig_val_ = 0;
@@ -231,10 +231,10 @@ class peak_detector_offline
 
     const double sampling_rate_;
     const double marker_val_;
-    const double previous_peak_reference_ratio_ = 0.5;
-    const double previous_peak_reference_attenuation_ = 70;
+    //const double previous_peak_reference_ratio_ = 0.5;
+    const double previous_peak_reference_attenuation_ = 150;
     const double peak_attenuation_;
-    const double threshold_ratio_ = 1.5;
+    const double threshold_ratio_ = 1.7;
     const int nr_slope_samples_;
 
 public:
@@ -251,16 +251,17 @@ public:
         : sampling_rate_(sampling_rate),
           marker_val_(marker_val),
           peak_attenuation_(1.0 / (1.0 + previous_peak_reference_attenuation_ / sampling_rate)),
-          nr_slope_samples_((100.0 * sampling_rate) / 1000.0)
+          nr_slope_samples_((50.0 * sampling_rate) / 1000.0)
     {
-        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 1, sampling_rate, 15, 25);
-        create_filter_iir(integrative_filter_.d, integrative_filter_.n, butterworth, low_pass, 1, sampling_rate, 3, 0);
-        create_filter_iir(baseline_filter_.d, baseline_filter_.n, butterworth, low_pass, 1, sampling_rate, 0.5, 0);
-        create_filter_iir(threshold_filter_.d, threshold_filter_.n, butterworth, low_pass, 2, sampling_rate, 0.15, 0);
+        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 1, sampling_rate, 19, 25);
+        create_filter_iir(integrative_filter_.d, integrative_filter_.n, butterworth, low_pass, 1, sampling_rate, 2.7, 0);
+        create_filter_iir(baseline_filter_.d, baseline_filter_.n, butterworth, low_pass, 1, sampling_rate, 0.6, 0);
+        create_filter_iir(threshold_filter_.d, threshold_filter_.n, butterworth, low_pass, 1, sampling_rate, 0.55, 0);
     }
 
-    inline void detect(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0)
+    inline void detect(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = 0.5)
     {
+        const double previous_peak_reference_ratio_ = previous_peak_reference_ratio;
         bandpass_filter_.init_history_values(ecg_signal[0], sampling_rate_);
         baseline_filter_.init_history_values(ecg_signal[0], sampling_rate_);
 
@@ -294,6 +295,8 @@ public:
                 }
                 else
                     previous_peak_amplitude_ *= peak_attenuation_;
+                if (r_reference_value)
+                    previous_peak_amplitude_ = r_reference_value;
             }
             else if (previous_sig_val_ < filt_signal[i])
             {
@@ -349,6 +352,22 @@ public:
                 else
                     peak_signal[minindx] = peakval;
             }
+        double average_r = 0;
+        for (unsigned int i = nr_slope_samples_; i < len; ++i)
+            if (peak_signal[i])
+            {
+                for (unsigned int j = 0; j < nr_slope_samples_ - 1; ++j)
+                    if (peak_signal[i - j] < peak_signal[i - j - 1])
+                    {
+                        peak_signal[i] = 0;
+                        --nr_peaks;
+                    }
+                if (peak_signal[i])
+                {
+                    average_r += filt_signal[i];
+                }
+            }
+        average_r /= (double)nr_peaks;
         if (peak_indexes)
         {
             peak_indexes->resize(nr_peaks);
@@ -360,7 +379,129 @@ public:
         delete[] baseline;
     }
 
-    inline void detect_fw(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal)
+    inline void detect9985_9978_9982(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = 0.5)
+    {
+        const double previous_peak_reference_ratio_ = previous_peak_reference_ratio;
+        bandpass_filter_.init_history_values(ecg_signal[0], sampling_rate_);
+        baseline_filter_.init_history_values(ecg_signal[0], sampling_rate_);
+
+        double* baseline = new double[len];
+        for (unsigned int i = 0; i < len; ++i)
+            baseline[i] = baseline_filter_.filter(ecg_signal[i]);
+        for (int i = len - 1; i > -1; --i)
+            baseline[i] = baseline_filter_.filter(baseline[i]);
+        for (unsigned int i = 0; i < len; ++i)
+            filt_signal[i] = bandpass_filter_.filter(ecg_signal[i]);
+        for (int i = len - 1; i > -1; --i)
+            filt_signal[i] = bandpass_filter_.filter(ecg_signal[i]);
+        for (unsigned int i = 0; i < len; ++i)
+            filt_signal[i] = integrative_filter_.filter(filt_signal[i] * filt_signal[i]);
+        for (int i = len - 1; i > -1; --i)
+            filt_signal[i] = integrative_filter_.filter(filt_signal[i]);
+        for (unsigned int i = 0; i < len; ++i)
+            threshold_signal[i] = threshold_filter_.filter(filt_signal[i]);
+        for (int i = len - 1; i > -1; --i)
+            threshold_signal[i] = threshold_filter_.filter(threshold_signal[i]);
+
+        for (unsigned int i = 0; i < len; ++i)
+        {
+            if (searching_for_peaks_ && (filt_signal[i] > threshold_signal[i] * threshold_ratio_) && (previous_sig_val_ > filt_signal[i]))
+            {
+                if ((previous_peak_amplitude_ == 0) || (previous_sig_val_ > previous_peak_amplitude_ * previous_peak_reference_ratio_))
+                {
+                    previous_peak_amplitude_ = previous_sig_val_;
+                    samples_after_peak_count_ = 1;
+                    searching_for_peaks_ = false;
+                }
+                else
+                    previous_peak_amplitude_ *= peak_attenuation_;
+                if (r_reference_value)
+                    previous_peak_amplitude_ = r_reference_value;
+            }
+            else if (previous_sig_val_ < filt_signal[i])
+            {
+                searching_for_peaks_ = true;
+                samples_after_peak_count_ = 0;
+            }
+
+            previous_sig_val_ = filt_signal[i];
+
+            if (samples_after_peak_count_)
+                ++samples_after_peak_count_;
+
+            if (samples_after_peak_count_ == nr_slope_samples_)
+            {
+                samples_after_peak_count_ = 0;
+                peak_signal[i] = ((marker_val_ == -1.0) ? filt_signal[i] : marker_val_);
+            }
+            else
+                peak_signal[i] = 0;
+        }
+        unsigned int nr_peaks = 0;
+        for (unsigned int i = nr_slope_samples_; i < len; ++i)
+            if (peak_signal[i])
+            {
+                double val = peak_signal[i];
+                peak_signal[i] = 0;
+                peak_signal[i - nr_slope_samples_ + 1] = val;
+                ++nr_peaks;
+            }
+        const int radius = (10.0 * sampling_rate_) / 1000.0;
+        for (unsigned int i = radius; i < len - radius; ++i)
+            if (peak_signal[i])
+            {
+                unsigned int maxindx = 0, minindx = 0;
+                double maxval = -2000000, minval = 2000000;
+                for (int j = -radius; j < radius; ++j)
+                {
+                    if (maxval < ecg_signal[i + j] - baseline[i + j])
+                    {
+                        maxval = ecg_signal[i + j] - baseline[i + j];
+                        maxindx = i + j;
+                    }
+                    if (minval > ecg_signal[i + j] - baseline[i + j])
+                    {
+                        minval = ecg_signal[i + j] - baseline[i + j];
+                        minindx = i + j;
+                    }
+                }
+                double peakval = peak_signal[i];
+                peak_signal[i] = 0;
+                if (maxval > -minval)
+                    peak_signal[maxindx] = peakval;
+                else
+                    peak_signal[minindx] = peakval;
+            }
+        double average_r = 0;
+        for (unsigned int i = nr_slope_samples_; i < len; ++i)
+            if (peak_signal[i])
+            {
+                for (unsigned int j = 0; j < nr_slope_samples_ - 1; ++j)
+                    if (peak_signal[i - j] < peak_signal[i - j - 1])
+                    {
+                        peak_signal[i] = 0;
+                        --nr_peaks;
+                    }
+                if (peak_signal[i])
+                {
+                    average_r += filt_signal[i];
+                }
+            }
+        average_r /= (double)nr_peaks;
+        if (peak_indexes)
+        {
+            peak_indexes->resize(nr_peaks);
+            nr_peaks = 0;
+            for (unsigned int i = 0; i < len; ++i)
+                if (peak_signal[i])
+                    (*peak_indexes)[nr_peaks++] = i;
+        }
+        delete[] baseline;
+        if (!r_reference_value)
+            detect(ecg_signal, len, peak_signal, filt_signal, threshold_signal, peak_indexes, average_r, 0.2);
+    }
+
+    /*inline void detect_fw(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal)
     {
         bandpass_filter_.init_history_values(ecg_signal[0], sampling_rate_);
 
@@ -403,5 +544,5 @@ public:
             else
                 peak_signal[i] = 0;
         }
-    }
+    }*/
 };
