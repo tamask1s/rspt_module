@@ -231,10 +231,10 @@ class peak_detector_offline
 
     const double sampling_rate_;
     const double marker_val_;
-    static constexpr double previous_peak_reference_ratio_ = 0.35;
+    static constexpr double previous_peak_reference_ratio_ = 0.0;
     const double previous_peak_reference_attenuation_ = 150;
     const double peak_attenuation_;
-    const double threshold_ratio_ = 1.7;
+    const double threshold_ratio_ = 1.5;
     const int nr_slope_samples_;
 
 public:
