@@ -272,7 +272,7 @@ public:
         for (unsigned int i = 0; i < len; ++i)
             filt_signal[i] = bandpass_filter_.filter(ecg_signal[i]);
         for (int i = len - 1; i > -1; --i)
-            filt_signal[i] = bandpass_filter_.filter(ecg_signal[i]);
+            filt_signal[i] = bandpass_filter_.filter(filt_signal[i]);
         for (unsigned int i = 0; i < len; ++i)
             filt_signal[i] = integrative_filter_.filter(filt_signal[i] * filt_signal[i]);
         for (int i = len - 1; i > -1; --i)
