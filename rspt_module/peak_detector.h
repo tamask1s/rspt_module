@@ -69,7 +69,6 @@ public:
         create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 2, sampling_rate, 10, 20);
         create_filter_iir(integrative_filter_.d, integrative_filter_.n, butterworth, low_pass, 2, sampling_rate, 3, 0);
         create_filter_iir(threshold_filter_.d, threshold_filter_.n, butterworth, low_pass, 2, sampling_rate, 0.15, 0);
-        set_mode(Mode::def);
     }
 
     /**
@@ -260,6 +259,7 @@ public:
         create_filter_iir(integrative_filter_.d, integrative_filter_.n, butterworth, low_pass, 1, sampling_rate, 2.7, 0);
         create_filter_iir(baseline_filter_.d, baseline_filter_.n, butterworth, low_pass, 1, sampling_rate, 0.6, 0);
         create_filter_iir(threshold_filter_.d, threshold_filter_.n, butterworth, low_pass, 1, sampling_rate, 0.55, 0);
+        set_mode(peak_detector_offline::Mode::def);
     }
 
     void set_mode(peak_detector_offline::Mode mode)
@@ -296,13 +296,15 @@ public:
 
         double* baseline = new double[len];
         for (unsigned int i = 0; i < len; ++i)
+        {
             baseline[i] = baseline_filter_.filter(ecg_signal[i]);
-        for (int i = len - 1; i > -1; --i)
-            baseline[i] = baseline_filter_.filter(baseline[i]);
-        for (unsigned int i = 0; i < len; ++i)
             filt_signal[i] = bandpass_filter_.filter(ecg_signal[i]);
+        }
         for (int i = len - 1; i > -1; --i)
+        {
+            baseline[i] = baseline_filter_.filter(baseline[i]);
             filt_signal[i] = bandpass_filter_.filter(filt_signal[i]);
+        }
         for (unsigned int i = 0; i < len; ++i)
             filt_signal[i] = integrative_filter_.filter(filt_signal[i] * filt_signal[i]);
         for (int i = len - 1; i > -1; --i)
