@@ -69,6 +69,7 @@ public:
         create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 2, sampling_rate, 10, 20);
         create_filter_iir(integrative_filter_.d, integrative_filter_.n, butterworth, low_pass, 2, sampling_rate, 3, 0);
         create_filter_iir(threshold_filter_.d, threshold_filter_.n, butterworth, low_pass, 2, sampling_rate, 0.15, 0);
+        set_mode(Mode::def);
     }
 
     /**
