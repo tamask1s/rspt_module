@@ -231,13 +231,17 @@ class peak_detector_offline
 
     const double sampling_rate_;
     const double marker_val_;
-    static constexpr double previous_peak_reference_ratio_ = 0.0;
-    const double previous_peak_reference_attenuation_ = 150;
-    const double peak_attenuation_;
-    const double threshold_ratio_ = 1.5;
-    const int nr_slope_samples_;
+    static constexpr double previous_peak_reference_ratio_default_ = 0.0;
+    double previous_peak_reference_ratio_ = 0.0;
+    double previous_peak_reference_attenuation_ = 150;
+    double peak_attenuation_;
+    double threshold_ratio_ = 1.5;
+    double peak_correction_radius_ms_ = 10.0;
+    int nr_slope_samples_;
+    int nr_slope_msecs_ = 50;
 
 public:
+    enum class Mode { def, high_sensitivity, high_ppv };
     /**
      * @brief Constructor for the peak detector.
      *
@@ -249,9 +253,7 @@ public:
      */
     peak_detector_offline(double sampling_rate, double marker_val = 1)
         : sampling_rate_(sampling_rate),
-          marker_val_(marker_val),
-          peak_attenuation_(1.0 / (1.0 + previous_peak_reference_attenuation_ / sampling_rate)),
-          nr_slope_samples_((50.0 * sampling_rate) / 1000.0)
+          marker_val_(marker_val)
     {
         create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 1, sampling_rate, 19, 25);
         create_filter_iir(integrative_filter_.d, integrative_filter_.n, butterworth, low_pass, 1, sampling_rate, 2.7, 0);
@@ -259,7 +261,34 @@ public:
         create_filter_iir(threshold_filter_.d, threshold_filter_.n, butterworth, low_pass, 1, sampling_rate, 0.55, 0);
     }
 
-    inline void detect(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_)
+    void set_mode(peak_detector_offline::Mode mode)
+    {
+        if (mode == Mode::high_sensitivity)
+        {
+            previous_peak_reference_ratio_ = 0.0;
+            previous_peak_reference_attenuation_ = 250;
+            nr_slope_msecs_ = 15;
+            threshold_ratio_ = 0.3;
+        }
+        else if (mode == Mode::high_ppv)
+        {
+            previous_peak_reference_ratio_ = 0.35;
+            previous_peak_reference_attenuation_ = 50;
+            nr_slope_msecs_ = 150;
+            threshold_ratio_ = 2.7;
+        }
+        else
+        {
+            previous_peak_reference_ratio_ = 0.0;
+            previous_peak_reference_attenuation_ = 150;
+            nr_slope_msecs_ = 50;
+            threshold_ratio_ = 1.5;
+        }
+        peak_attenuation_ = 1.0 / (1.0 + previous_peak_reference_attenuation_ / sampling_rate_);
+        nr_slope_samples_ = (nr_slope_msecs_ * sampling_rate_) / 1000.0;
+    }
+
+    inline void detect(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_default_)
     {
         bandpass_filter_.init_history_values(ecg_signal[0], sampling_rate_);
         baseline_filter_.init_history_values(ecg_signal[0], sampling_rate_);
@@ -328,7 +357,7 @@ public:
                 ++nr_peaks;
             }
         average_r /= (double)nr_peaks;
-        const int radius = (10.0 * sampling_rate_) / 1000.0;
+        const int radius = (peak_correction_radius_ms_ * sampling_rate_) / 1000.0;
         for (unsigned int i = radius; i < len - radius; ++i)
             if (peak_signal[i])
             {

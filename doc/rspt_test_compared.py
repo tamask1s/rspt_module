@@ -15,7 +15,7 @@ ecg_signal = record.p_signal[:, 0]
 sampling_rate = record.fs
 
 print("Detecting. sampling_rate:", sampling_rate)
-peak_indexes = np.array(rspt_module.detect_peaks(ecg_signal, sampling_rate))
+peak_indexes = np.array(rspt_module.detect_peaks(ecg_signal, sampling_rate, 'high_sensitivity'))
 print(f"{len(peak_indexes)} peaks detected.")
 print("First 10 peak indexes:", peak_indexes[:10])
 
@@ -46,6 +46,13 @@ for i, ann in enumerate(annot_r_peaks):
         FN.append(ann)
 
 print(f"TP: {len(TP)}, FP: {len(FP)}, FN: {len(FN)}")
+TP_ = len(TP)
+FP_ = len(FP)
+FN_ = len(FN)
+sensitivity = TP_ / (TP_ + FN_) if (TP_ + FN_) > 0 else 0
+ppv = TP_ / (TP_ + FP_) if (TP_ + FP_) > 0 else 0
+print(f"Sensitivity (100% means no FN): {sensitivity * 100:.3f}%")
+print(f"PPV (100% means no FP): {ppv * 100:.3f}%")
 
 # --- Közös ablak, 2 subplot ---
 fig, axs = plt.subplots(2, 1, figsize=(18, 8), sharex=True)

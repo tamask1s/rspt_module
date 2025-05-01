@@ -73,27 +73,25 @@ py::array_t<double> square_numpy(py::array_t<double> array) {
     return result;
 }
 
-std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double sampling_rate) {
+std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double sampling_rate, std::string mode = "default") {
     py::buffer_info buf = ecg_signal_np.request();
     unsigned int len = buf.shape[0];
 
-    std::cout << "stride: " << buf.strides[0] << " bytes" << std::endl;
-    std::cout << "len: " << len << std::endl;
-
     std::vector<double> ecg_signal(len);
     char* base_ptr = static_cast<char*>(buf.ptr);
-    for (unsigned int i = 0; i < len; ++i) {
-        double* val_ptr = reinterpret_cast<double*>(base_ptr + i * buf.strides[0]);
-        ecg_signal[i] = *val_ptr;
-    }
+    for (unsigned int i = 0; i < len; ++i)
+        ecg_signal[i] = *reinterpret_cast<double*>(base_ptr + i * buf.strides[0]);
 
-    // work bufferek
-    std::vector<double> peak_signal(len);
-    std::vector<double> filt_signal(len);
-    std::vector<double> threshold_signal(len);
+    std::vector<double> peak_signal(len), filt_signal(len), threshold_signal(len);
     std::vector<unsigned int> peak_indexes;
 
     peak_detector_offline detector(sampling_rate);
+    if (mode == "high_sensitivity")
+        detector.set_mode(peak_detector_offline::Mode::high_sensitivity);
+    else if (mode == "high_ppv")
+        detector.set_mode(peak_detector_offline::Mode::high_ppv);
+    else
+        detector.set_mode(peak_detector_offline::Mode::def);
     detector.detect(ecg_signal.data(), len, peak_signal.data(), filt_signal.data(), threshold_signal.data(), &peak_indexes);
 
     return peak_indexes;
@@ -106,5 +104,5 @@ PYBIND11_MODULE(rspt_module, m) {
     m.def("square_inplace_numpy", &square_inplace_numpy, "In-place squaring of a numpy 2D array");
     m.def("square_list", &square_list, "Squaring of a Python 2D list, returning a new list");
     m.def("square_numpy", &square_numpy, "Squaring of a numpy 2D array, returning a new array");
-    m.def("detect_peaks", &detect_peaks, "Detect ECG peaks", py::arg("ecg_signal"), py::arg("sampling_rate"));
+    m.def("detect_peaks", &detect_peaks, "Detect ECG peaks", py::arg("ecg_signal"), py::arg("sampling_rate"), py::arg("mode") = "default");
 }

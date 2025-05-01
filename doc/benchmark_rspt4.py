@@ -1,7 +1,7 @@
 import wfdb
 import time
 import numpy as np
-from rspt_module import detect_peaks
+from slice_and_cluster02 import slice_and_cluster
 
 start_time2 = time.perf_counter()
 end_time2 = time.perf_counter()
@@ -18,7 +18,7 @@ def benchmark_record(record_name, tolerance=0.05):
     signal = record.p_signal[:, 0]
 
     start_time2 = time.perf_counter()
-    detected_peaks = detect_peaks(signal, fs, 'default') #'high_sensitivity' 'high_ppv'
+    detected_peaks = slice_and_cluster(record_name);
     end_time2 = time.perf_counter()
     elapsed_ms2 = elapsed_ms2 + (end_time2 - start_time2) * 1000
 
@@ -83,7 +83,7 @@ if __name__ == "__main__":
 
     records = ['100', '101', '102', '103', '104', '105', '106', '107','108', '109', '111', '112', '113', '114', '115', '116', '117', '118', '119', '121', '122', '123', '124', '200', '201', '202', '203', '205', '207', '208', '209', '210', '212', '213', '214', '215', '217', '219', '220', '221', '222', '223', '228', '230', '231', '232', '233', '234']
     records = ['100', '101',        '103',        '105', '106',       '108', '109', '111', '112', '113', '114', '115', '116', '117', '118', '119', '121', '122', '123', '124', '200', '201', '202',        '205',               '209', '210', '212', '213', '214', '215',        '219', '220', '221', '222', '223',        '230', '231', '232', '233', '234']
-    #records = ['108', '114', '222', '233', '117', '214', '113', '115']
+    records = ['108', '114', '222', '233', '117', '214', '113', '115']
     #records = ['100', '101', '103', '105', '111', '112', '113', '115', '117', '118', '119', '121', '122', '200', '202', '209']    # ide még bővíthetsz
     sensitivities = []
     ppvs = []
