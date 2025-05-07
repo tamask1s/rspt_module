@@ -1,28 +1,76 @@
 import wfdb
+from wfdb import processing
 import time
 import numpy as np
 from rspt_module import detect_peaks
+from slice_and_cluster07 import do_ica
+import neurokit2 as nk
 
 start_time2 = time.perf_counter()
 end_time2 = time.perf_counter()
 elapsed_ms2 = (end_time2 - start_time2) * 1000
+detection_metod = 'None'
 
 def benchmark_record(record_name, tolerance=0.05):
     global elapsed_ms2
+    global detection_metod
 
     record_path = "/media/sf_SharedFolder/QT/mit-bih-arrhythmia-database-1.0.0/"
+    #record_path = "/media/sf_SharedFolder/QT/st-petersburg-incart-12-lead-arrhythmia-database-1.0.0/files/"
     record = wfdb.rdrecord(record_path + record_name)
     annotation = wfdb.rdann(record_path + record_name, 'atr')
 
     fs = record.fs
     signal = record.p_signal[:, 0]
+    #signal = do_ica(record.p_signal)
+    #signal = signal[:, 0]
 
+    detected_peaks = []
     start_time2 = time.perf_counter()
-    detected_peaks = detect_peaks(signal, fs, 'default') #'high_sensitivity' 'high_ppv'
+    
+    if True:
+        detection_metod = 'RSPT'
+        detected_peaks = detect_peaks(signal, fs, 'default') #'high_sensitivity' 'high_ppv'
+    if False:
+        detection_metod = 'neurokit ecg_peaks'
+        signals, info = nk.ecg_peaks(signal, sampling_rate=fs, method="neurokit")
+        detected_peaks = info["ECG_R_Peaks"]
+    if False:
+        detection_metod = 'neurokit ecg_process'
+        signals, info = nk.ecg_process(signal, sampling_rate=fs)
+        detected_peaks = info["ECG_R_Peaks"]    
+    if False:
+        detection_metod = 'wfdb.processing'
+        #conf = wfdb.processing.qrs.GQRS.Conf(
+        #    fs=record.fs,
+        #    adc_gain=record.adcgain[0],
+        #    adc_zero=record.adczero[0],
+        #    threshold=1.0,
+        #    hr=75,
+        #    RRdelta=0.2,
+        #    RRmin=0.28,
+        #    RRmax=2.4,
+        #    QS=0.07,
+        #    QT=0.35,
+        #    RTmin=0.25,
+        #    RTmax=0.33,
+        #    QRSa=750,
+        #    QRSamin=130
+        #)
+
+        #gqrs = wfdb.processing.qrs.GQRS()
+        #annotations = gqrs.detect(x=signal, conf=conf, adc_zero=record.adczero[0])
+        #detected_peaks = wfdb.processing.gqrs_detect(signal, fs=record.fs)
+
+        #detected_peaks = np.array([a.time for a in annotations])
+        detected_peaks = processing.gqrs_detect(sig=signal, fs=fs)
+
     end_time2 = time.perf_counter()
     elapsed_ms2 = elapsed_ms2 + (end_time2 - start_time2) * 1000
 
-    annot_r_peaks = annotation.sample[np.isin(annotation.symbol, ['N', 'L', 'R', 'V', 'A', 'F', 'j', 'E', 'e', 'a', 'J', 'S'])]
+    #annot_r_peaks = annotation.sample[np.isin(annotation.symbol, ['N', 'L', 'R', 'V', 'A', 'F', 'j', 'E', 'e', 'a', 'J', 'S'])]
+    annot_r_peaks = annotation.sample[np.isin(annotation.symbol, ['N', 'L', 'R', 'B', 'A', 'a', 'J', 'S', 'V', 'r', 'F', 'e', 'j', 'n', 'E', '/', 'f', 'Q', '?'])]
+    
 
     tolerance_samples = int(tolerance * fs)
 
@@ -83,8 +131,10 @@ if __name__ == "__main__":
 
     records = ['100', '101', '102', '103', '104', '105', '106', '107','108', '109', '111', '112', '113', '114', '115', '116', '117', '118', '119', '121', '122', '123', '124', '200', '201', '202', '203', '205', '207', '208', '209', '210', '212', '213', '214', '215', '217', '219', '220', '221', '222', '223', '228', '230', '231', '232', '233', '234']
     records = ['100', '101',        '103',        '105', '106',       '108', '109', '111', '112', '113', '114', '115', '116', '117', '118', '119', '121', '122', '123', '124', '200', '201', '202',        '205',               '209', '210', '212', '213', '214', '215',        '219', '220', '221', '222', '223',        '230', '231', '232', '233', '234']
+    #records = ['I{:02d}'.format(i) for i in range(1, 76)]
     #records = ['108', '114', '222', '233', '117', '214', '113', '115']
     #records = ['100', '101', '103', '105', '111', '112', '113', '115', '117', '118', '119', '121', '122', '200', '202', '209']    # ide még bővíthetsz
+    #records = ['100', '101']
     sensitivities = []
     ppvs = []
     results = []
@@ -115,9 +165,10 @@ if __name__ == "__main__":
     avg_sensitivity = np.mean([se for _, se in sensitivities])
     avg_ppv = np.mean([ppv for _, ppv in ppvs])
 
+    print('Detection metod:', detection_metod)
     print(f"Average Sensitivity (100% means no FN): {avg_sensitivity * 100:.3f}%")
     print(f"Average (100% means no FP) PPV: {avg_ppv * 100:.3f}%")
     print(f"Average SPPV: {(avg_ppv + avg_sensitivity) * 50:.3f}%")
     
-    print(f"Futási idő: {elapsed_ms:.3f} ms")
-    print(f"Futási idő: {elapsed_ms2:.3f} ms")
+    print(f"Elapsed detection time (with data open): {elapsed_ms:.3f} ms")
+    print(f"Elapsed detection time (processing only): {elapsed_ms2:.3f} ms")

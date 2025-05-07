@@ -1,7 +1,7 @@
 import wfdb
 import time
 import numpy as np
-from slice_and_cluster02 import slice_and_cluster
+from slice_and_cluster06 import slice_and_cluster
 
 start_time2 = time.perf_counter()
 end_time2 = time.perf_counter()

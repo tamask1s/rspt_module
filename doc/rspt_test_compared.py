@@ -4,18 +4,20 @@ import rspt_module
 import matplotlib.pyplot as plt
 
 print("opening")
-record_path = "/media/sf_SharedFolder/QT/mit-bih-arrhythmia-database-1.0.0/221"
+#record_path = "/media/sf_SharedFolder/QT/mit-bih-arrhythmia-database-1.0.0/200"
+#record_path = "/media/sf_SharedFolder/QT/lobachevsky-university-electrocardiography-database-1.0.1/data/117"
+record_path = "/media/sf_SharedFolder/QT/st-petersburg-incart-12-lead-arrhythmia-database-1.0.0/files/I31"
 record = wfdb.rdrecord(record_path)
 annotation = wfdb.rdann(record_path, 'atr')
 #record = wfdb.rdrecord('101', pn_dir='mitdb')
 #annotation = wfdb.rdann('101', 'atr', pn_dir='mitdb')
 print("opened")
 
-ecg_signal = record.p_signal[:, 0]
+ecg_signal = record.p_signal[:, 8]
 sampling_rate = record.fs
 
 print("Detecting. sampling_rate:", sampling_rate)
-peak_indexes = np.array(rspt_module.detect_peaks(ecg_signal, sampling_rate, 'high_sensitivity'))
+peak_indexes = np.array(rspt_module.detect_peaks(ecg_signal, sampling_rate, 'high_sensitivity')) #'high_ppv'
 print(f"{len(peak_indexes)} peaks detected.")
 print("First 10 peak indexes:", peak_indexes[:10])
 
