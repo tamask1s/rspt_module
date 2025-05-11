@@ -14,6 +14,7 @@
 #include <chrono>
 #include <deque>
 #include <cmath>
+#include <algorithm>
 
 using namespace std;
 
@@ -138,7 +139,8 @@ std::vector<unsigned int> detect_multichannel(py::array_t<double> ecg_signal_np,
         }
         data_ptrs[ch] = data[ch].data();
     }
-    cout << "nr_channels: " << nr_channels << " len: " << len << endl;
+    
+    //cout << "nr_channels: " << nr_channels << " len: " << len << endl;
     std::vector<double> peak_signal(len), filt_signal(len), threshold_signal(len);
     std::vector<unsigned int> peak_indexes;
         

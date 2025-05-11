@@ -24,8 +24,7 @@ struct iir_filter_2nd_order
     iir_filter_2nd_order()
         : n(3, 0.0), d(3, 0.0)
     {
-        memset(xz, 0, nr_coefficients_ * sizeof(double));
-        memset(yz, 0, nr_coefficients_ * sizeof(double));
+        reset();
     }
 
     inline double filter(double x)
@@ -119,8 +118,15 @@ struct iir_filter_2nd_order
 //                y[i] = d[0] * x[i] + d[1] * x[i + 1] + d[2] * x[i + 2] + d[3] * x[i + 3] + d[4] * x[i + 4] + d[5] * x[i + 5] + d[6] * x[i + 6] - n[1] * y[i + 1] - n[2] * y[i + 2] - n[3] * y[i + 3] - n[4] * y[i + 4] - n[5] * y[i + 5] - n[6] * y[i + 6];
 //    }
 
+    void reset()
+    {
+        memset(xz, 0, nr_coefficients_ * sizeof(double));
+        memset(yz, 0, nr_coefficients_ * sizeof(double));
+    }
+
     void init_history_values(double x, int nr_samples)
     {
+        reset();
         for (int i = 0; i < 4 * nr_samples; ++i)
             filter(x);
     }
@@ -136,8 +142,7 @@ struct iir_filter_1st_order
     iir_filter_1st_order()
         : n(2, 0.0), d(2, 0.0)
     {
-        memset(xz, 0, nr_coefficients_ * sizeof(double));
-        memset(yz, 0, nr_coefficients_ * sizeof(double));
+        reset();
     }
 
     inline double filter(double x)
@@ -229,8 +234,15 @@ struct iir_filter_1st_order
 //                y[i] = d[0] * x[i] + d[1] * x[i + 1] + d[2] * x[i + 2] + d[3] * x[i + 3] + d[4] * x[i + 4] + d[5] * x[i + 5] + d[6] * x[i + 6] - n[1] * y[i + 1] - n[2] * y[i + 2] - n[3] * y[i + 3] - n[4] * y[i + 4] - n[5] * y[i + 5] - n[6] * y[i + 6];
 //    }
 
+    void reset()
+    {
+        memset(xz, 0, nr_coefficients_ * sizeof(double));
+        memset(yz, 0, nr_coefficients_ * sizeof(double));
+    }
+
     void init_history_values(double x, int nr_samples)
     {
+        reset();
         for (int i = 0; i < 4 * nr_samples; ++i)
             filter(x);
     }
@@ -247,8 +259,7 @@ struct iir_filter_4th_order
     iir_filter_4th_order()
         : n(5, 0.0), d(5, 0.0)
     {
-        memset(xz, 0, nr_coefficients_ * sizeof(double));
-        memset(yz, 0, nr_coefficients_ * sizeof(double));
+        reset();
     }
 
     inline double filter(double x)
@@ -263,8 +274,15 @@ struct iir_filter_4th_order
         return yz[0];
     }
 
+    void reset()
+    {
+        memset(xz, 0, nr_coefficients_ * sizeof(double));
+        memset(yz, 0, nr_coefficients_ * sizeof(double));
+    }
+
     void init_history_values(double x, int nr_samples)
     {
+        reset();
         for (int i = 0; i < 4 * nr_samples; ++i)
             filter(x);
     }

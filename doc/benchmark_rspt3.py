@@ -40,7 +40,8 @@ def benchmark_record(record_name, tolerance=0.05):
 
     if detection_metod == 1 or detection_metod == 'RSPT':
         detection_metod = 'RSPT'
-        detected_peaks = detect_peaks(signal, fs, 'default')
+        detected_peaks = detect_multichannel(signal, fs, 'default')
+        #detected_peaks = detect_peaks(signal, fs, 'default')
     if detection_metod == 2 or detection_metod == 'neurokit ecg_peaks':
         detection_metod = 'neurokit ecg_peaks'
         signals, info = nk.ecg_peaks(signal, sampling_rate=fs, method="neurokit")

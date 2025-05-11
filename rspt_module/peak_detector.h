@@ -289,10 +289,12 @@ public:
         nr_slope_samples_ = (nr_slope_msecs_ * sampling_rate_) / 1000.0;
     }
 
-    inline void detect(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_default_)
+    inline int detect(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_default_)
     {
         bandpass_filter_.init_history_values(ecg_signal[0], sampling_rate_);
         baseline_filter_.init_history_values(ecg_signal[0], sampling_rate_);
+        integrative_filter_.reset();
+        threshold_filter_.reset();
 
         double* baseline = new double[len];
         for (unsigned int i = 0; i < len; ++i)
@@ -350,6 +352,8 @@ public:
         }
         double average_r = 0;
         unsigned int nr_peaks = 0;
+        for (unsigned int i = 0; i < nr_slope_samples_; ++i)
+            peak_signal[i] = 0;
         for (unsigned int i = nr_slope_samples_; i < len; ++i)
             if (peak_signal[i])
             {
@@ -361,6 +365,7 @@ public:
             }
         average_r /= (double)nr_peaks;
         const int radius = (peak_correction_radius_ms_ * sampling_rate_) / 1000.0;
+        unsigned int nr_min_peaks = 0;
         for (unsigned int i = radius; i < len - radius; ++i)
             if (peak_signal[i])
             {
@@ -382,7 +387,10 @@ public:
                 double peakval = peak_signal[i];
                 peak_signal[i] = 0;
                 if (maxval > -minval)
+                {
+                    nr_min_peaks++;
                     peak_signal[maxindx] = peakval;
+                }
                 else
                     peak_signal[minindx] = peakval;
             }
@@ -395,19 +403,76 @@ public:
                     (*peak_indexes)[nr_peaks++] = i;
         }
         delete[] baseline;
+        return (nr_peaks / 2) > nr_min_peaks ? nr_peaks : (-nr_peaks);
     }
+
+//    inline void cleanup_index_array(std::vector<unsigned int>& final_peak_indexes, std::vector<std::vector<unsigned int>>& peak_index_array, unsigned int tolerance, unsigned int nr_channels)
+//    {
+//        final_peak_indexes.clear();
+//        if (nr_channels == 0) return;
+//
+//        const std::vector<unsigned int>& ref_peaks = peak_index_array[0];
+//
+//        for (unsigned int ref_index : ref_peaks)
+//        {
+//            uint32_t invalid_count = 0;
+//
+//            // Ellenőrizzük, hogy a többi csatornában van-e megfelelő index
+//            for (unsigned int ch = 1; ch < nr_channels; ++ch)
+//            {
+//                const std::vector<unsigned int>& channel_peaks = peak_index_array[ch];
+//
+//                // Keresés a tolerance-en belüli indexekre
+//                bool found_match = std::any_of(channel_peaks.begin(), channel_peaks.end(), [&](unsigned int idx)
+//                {
+//                    return std::abs((int)idx - (int)ref_index) <= (int)tolerance;
+//                });
+//
+//                if (!found_match)
+//                {
+//                    ++invalid_count;
+//                    break;
+//                }
+//            }
+//
+//            if (invalid_count < nr_channels / 2)
+//                final_peak_indexes.push_back(ref_index);
+//        }
+//    }
 
     inline void detect_multichannel(double** ecg_signal_multich, unsigned int nr_channels, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_default_)
     {
-        double* ecg_signal = new double[len];
-        for (unsigned int j = 0; j < len; ++j)
+        double sign_array[nr_channels];
+        for (unsigned int i = 0; i < nr_channels; ++i)
+            sign_array[i] = 1;
+        for (unsigned int i = 0; i < nr_channels; ++i)
         {
-            ecg_signal[j] = ecg_signal_multich[0][j];
-            for (unsigned int i = 1; i < nr_channels; ++i)
-                ecg_signal[j] += ecg_signal_multich[i][j];
-            ecg_signal[j] /= nr_channels;
+            sign_array[i] = detect(ecg_signal_multich[i], len, peak_signal, filt_signal, threshold_signal, 0, r_reference_value, previous_peak_reference_ratio);
+            if (sign_array[i] < 0)
+                sign_array[i] = -1;
+            else
+                sign_array[i] = 0;
         }
+
+        double* ecg_signal = new double[len];
+        for (size_t i = 0; i < len; ++i)
+        {
+            ecg_signal[i] = ecg_signal_multich[0][i];
+            for (size_t ch = 1; ch < nr_channels; ++ch)
+                ecg_signal[i] += ecg_signal_multich[ch][i] * sign_array[ch];
+            ecg_signal[i] /= (double)nr_channels;
+        }
+
+//        std::vector<std::vector<unsigned int>> peak_detector_offline::peak_index_array;
+
         detect(ecg_signal, len, peak_signal, filt_signal, threshold_signal, peak_indexes, r_reference_value, previous_peak_reference_ratio);
+//        peak_index_array.resize(nr_channels);
+//        set_mode(Mode::high_sensitivity);
+//        for (unsigned int i = 0; i < nr_channels; ++i)
+//            detect(ecg_signal_multich[i], len, peak_signal, filt_signal, threshold_signal, &peak_index_array[i], r_reference_value, previous_peak_reference_ratio);
+//        const unsigned int tolerance = (50 * sampling_rate_) / 1000.0;
+//        //*peak_indexes = peak_index_array[0];
+//        cleanup_index_array(*peak_indexes, peak_index_array, tolerance, nr_channels);
         delete[] ecg_signal;
     }
 
