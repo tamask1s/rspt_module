@@ -579,7 +579,7 @@ public:
             if (sign_array[i] < 0)
                 sign_array[i] = -1;
             else
-                sign_array[i] = 1;
+                sign_array[i] = 0;
         }
 
         double* ecg_signal = new double[len];
