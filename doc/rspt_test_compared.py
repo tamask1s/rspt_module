@@ -4,25 +4,26 @@ import rspt_module
 import matplotlib.pyplot as plt
 
 print("opening")
-#record_path = "/media/sf_SharedFolder/QT/mit-bih-arrhythmia-database-1.0.0/200"
+record_path = "/media/sf_SharedFolder/QT/mit-bih-arrhythmia-database-1.0.0/200"
 #record_path = "/media/sf_SharedFolder/QT/lobachevsky-university-electrocardiography-database-1.0.1/data/117"
-record_path = "/media/sf_SharedFolder/QT/st-petersburg-incart-12-lead-arrhythmia-database-1.0.0/files/I31"
+#record_path = "/media/sf_SharedFolder/QT/st-petersburg-incart-12-lead-arrhythmia-database-1.0.0/files/I54"
 record = wfdb.rdrecord(record_path)
 annotation = wfdb.rdann(record_path, 'atr')
 #record = wfdb.rdrecord('101', pn_dir='mitdb')
 #annotation = wfdb.rdann('101', 'atr', pn_dir='mitdb')
 print("opened")
 
-ecg_signal = record.p_signal[:, 8]
+ecg_signal = record.p_signal[:, :]
 sampling_rate = record.fs
 
 print("Detecting. sampling_rate:", sampling_rate)
-peak_indexes = np.array(rspt_module.detect_peaks(ecg_signal, sampling_rate, 'high_sensitivity')) #'high_ppv'
+peak_indexes = np.array(rspt_module.detect_multichannel(ecg_signal, sampling_rate, 'default')) #'high_ppv'
 print(f"{len(peak_indexes)} peaks detected.")
 print("First 10 peak indexes:", peak_indexes[:10])
 
 # Annotációból az R csúcsok
-annot_r_peaks = annotation.sample[np.isin(annotation.symbol, ['N', 'L', 'R', 'V', 'A', 'F', 'j', 'E', 'e', 'a', 'J', 'S'])]
+#annot_r_peaks = annotation.sample[np.isin(annotation.symbol, ['N', 'L', 'R', 'V', 'A', 'F', 'j', 'E', 'e', 'a', 'J', 'S'])]
+annot_r_peaks = annotation.sample[np.isin(annotation.symbol, ['N', 'L', 'R', 'B', 'A', 'a', 'J', 'S', 'V', 'r', 'F', 'e', 'j', 'n', 'E', '/', 'f', 'Q', '?'])]
 
 # TP / FP / FN meghatározása
 tolerance_samples = int(0.05 * sampling_rate)
