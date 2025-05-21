@@ -283,7 +283,7 @@ public:
             previous_peak_reference_ratio_ = 0.0;
             previous_peak_reference_attenuation_ = 150;
             nr_slope_msecs_ = 50;
-            threshold_ratio_ = 1.5;
+            threshold_ratio_ = 1.05;
         }
         peak_attenuation_ = 1.0 / (1.0 + previous_peak_reference_attenuation_ / sampling_rate_);
         nr_slope_samples_ = (nr_slope_msecs_ * sampling_rate_) / 1000.0;
@@ -445,6 +445,7 @@ public:
     {
 //        double* baseline = new double[len];
         double* ecg_signal_s = new double[len];
+        double* artifacts = new double[len];
         memset(ecg_signal_s, 0, len);
         for (unsigned int ch = 0; ch < nr_channels; ++ch)
         {
@@ -452,6 +453,19 @@ public:
             baseline_filter_.init_history_values(ecg_signal[ch][0], sampling_rate_);
             integrative_filter_.reset();
             threshold_filter_.reset();
+            for (unsigned int i = 1; i < len; ++i)
+                artifacts[i] = integrative_filter_.filter((ecg_signal[ch][i] - ecg_signal[ch][i - 1]) * (ecg_signal[ch][i] - ecg_signal[ch][i - 1]));
+            double artifact_min = 200000000;
+            for (int i = len - 1; i > -1; --i)
+            {
+                artifacts[i] = integrative_filter_.filter(artifacts[i]);
+                if (artifact_min > artifacts[i])
+                    artifact_min = artifacts[i];
+            }
+            artifact_min -= 0.06;
+            for (unsigned int i = 0; i < len; ++i)
+                artifacts[i] -= artifact_min;
+            integrative_filter_.reset();
             for (unsigned int i = 0; i < len; ++i)
                 filt_signal[i] = bandpass_filter_.filter(ecg_signal[ch][i]);
             for (int i = len - 1; i > -1; --i)
@@ -461,9 +475,15 @@ public:
             for (int i = len - 1; i > -1; --i)
             {
                 filt_signal[i] = integrative_filter_.filter(filt_signal[i]);
+                filt_signal[i] /= artifacts[i];
                 ecg_signal_s[i] += filt_signal[i];
             }
         }
+        integrative_filter_.reset();
+        for (unsigned int i = 0; i < len; ++i)
+            ecg_signal_s[i] = integrative_filter_.filter(ecg_signal_s[i]);
+        for (int i = len - 1; i > -1; --i)
+            ecg_signal_s[i] = integrative_filter_.filter(ecg_signal_s[i]);
 
         for (int i = len - 1; i > -1; --i)
         {
@@ -562,6 +582,7 @@ public:
         }
 //        delete[] baseline;
         delete[] ecg_signal_s;
+        delete[] artifacts;
         //return (nr_peaks / 2) > nr_min_peaks ? nr_peaks : (-nr_peaks);
         return 0;
     }
