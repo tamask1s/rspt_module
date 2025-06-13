@@ -226,7 +226,7 @@ class peak_detector_offline
     double previous_peak_amplitude_ = 0;
     double previous_sig_val_ = 0;
     bool searching_for_peaks_ = false;
-    int samples_after_peak_count_ = 0;
+    unsigned int samples_after_peak_count_ = 0;
     int sample_indx_ = 0;
 
     const double sampling_rate_;
@@ -289,7 +289,7 @@ public:
         nr_slope_samples_ = (nr_slope_msecs_ * sampling_rate_) / 1000.0;
     }
 
-    inline int detect(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_default_)
+    inline int detect(const double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_default_)
     {
         bandpass_filter_.init_history_values(ecg_signal[0], sampling_rate_);
         baseline_filter_.init_history_values(ecg_signal[0], sampling_rate_);
@@ -441,7 +441,7 @@ public:
 //    }
 
 
-    inline int detect_multich(double** ecg_signal, unsigned int nr_channels, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_default_)
+    inline int detect_multich(const double** ecg_signal, unsigned int nr_channels, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_default_)
     {
 //        double* baseline = new double[len];
         double* ecg_signal_s = new double[len];
@@ -587,7 +587,7 @@ public:
         return 0;
     }
 
-    inline void detect_multichannel(double** ecg_signal_multich, unsigned int nr_channels, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_default_)
+    inline void detect_multichannel(const double** ecg_signal_multich, unsigned int nr_channels, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_default_)
     {
         detect_multich(ecg_signal_multich, nr_channels, len, peak_signal, filt_signal, threshold_signal, peak_indexes, r_reference_value, previous_peak_reference_ratio);
         return;

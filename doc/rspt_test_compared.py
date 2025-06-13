@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 print("opening")
 record_path = "/media/sf_SharedFolder/QT/mit-bih-arrhythmia-database-1.0.0/200"
 #record_path = "/media/sf_SharedFolder/QT/lobachevsky-university-electrocardiography-database-1.0.1/data/117"
-#record_path = "/media/sf_SharedFolder/QT/st-petersburg-incart-12-lead-arrhythmia-database-1.0.0/files/I54"
+record_path = "/media/sf_SharedFolder/QT/st-petersburg-incart-12-lead-arrhythmia-database-1.0.0/files/I54"
 record = wfdb.rdrecord(record_path)
 annotation = wfdb.rdann(record_path, 'atr')
 #record = wfdb.rdrecord('101', pn_dir='mitdb')

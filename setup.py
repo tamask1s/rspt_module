@@ -12,7 +12,8 @@ module = Extension(
     'rspt_module',
     sources=['rspt_module/rspt_module.cpp',
              'rspt_module/lib_filter/iir_filter_design.cpp',
-             'rspt_module/lib_filter/iir_filter.cpp'],
+             'rspt_module/lib_filter/iir_filter.cpp',
+             'rspt_module/ecg_analysis.cpp'],
     include_dirs=[numpy.get_include(), pybind11_include],
     language='c++'
 )
