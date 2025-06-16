@@ -5,8 +5,11 @@ from rspt_module import analyse_ecg
 
 # Beállítások
 data_dir    = '/media/sf_SharedFolder/QT/lobachevsky-university-electrocardiography-database-1.0.1/data'
-             #'/media/sf_SharedFolder/QT/qt-database-1.0.0/sel301.hea'
+#data_dir    = '/media/sf_SharedFolder/QT/qt-database-1.0.0/sel301.hea'
+#data_dir    = '/media/sf_SharedFolder/QT/qt-database-1.0.0'
+
 record_name = '1'
+#record_name = 'sel301'
 ch_idx      = 1  # A megjelenítendő csatorna indexe (pl. I. elvezetés)
 
 # Jel beolvasása
@@ -27,7 +30,10 @@ result = analyse_ecg(ecg_array, fs, mode="default")
 # Lekérjük az annotációkat: formátumuk "index:symbol"
 annots = result["annotations"]
 
-print(result)
+#print(result)
+for key, value in result.items():
+    print(f"{key}: {value}")
+
 print("-------------------------")
 print("-------------------------")
 print("-------------------------")
