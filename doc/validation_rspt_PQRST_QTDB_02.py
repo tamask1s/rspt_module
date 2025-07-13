@@ -1,6 +1,7 @@
 import wfdb
 import numpy as np
 import matplotlib.pyplot as plt
+import rspt_module
 
 RECORD_PATH = '/media/sf_SharedFolder/QT/qt-database-1.0.0/sel301'
 LEAD_IDX = 0
@@ -118,6 +119,25 @@ if __name__ == "__main__":
     signal, ann, fs = load_qtdb_record(RECORD_PATH)
     triplets = extract_structured_annotations(ann)
     ann_by_type = organize_annotations_by_type(triplets)
-    plot_annotations(signal, ann_by_type, fs)
+    #plot_annotations(signal, ann_by_type, fs)
     result = compute_rspt_like_stats(signal, ann_by_type, fs)
     print_result(result)
+
+    # RSPT analízis meghívása
+    rspt_result = rspt_module.analyse_ecg(np.stack([signal, signal], axis=1), fs)
+    #rspt_result = rspt.analyze_ecg(ecg_signal=signal.tolist(), sampling_rate=fs, leads=[LEAD_IDX])
+    print_result(rspt_result)
+
+    # Eredmények összehasonlítása
+    print("\n--- Összehasonlítás: QTDB vs RSPT ---")
+    keys_to_compare = [
+        "rr_interval_ms", "rr_variation_ms", "heart_rate_bpm", "pr_interval_ms",
+        "qrs_duration_ms", "qt_interval_ms", "qtc_interval_ms",
+        "p_wave_duration_ms", "t_wave_duration_ms"
+    ]
+
+    for key in keys_to_compare:
+        own_val = result.get(key)
+        rspt_val = rspt_result.get(key)
+        diff = abs(own_val - rspt_val) if own_val is not None and rspt_val is not None else None
+        print(f"{key:<25} QTDB: {own_val:<10.2f} | RSPT: {rspt_val:<10.2f} | Δ: {diff:.2f}" if diff is not None else f"{key:<25} Érték hiányzik.")
