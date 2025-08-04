@@ -34,11 +34,15 @@ def organize_annotations_by_type(triplets):
     for label, on, peak, off in triplets:
         ann_by_type[label].append((on, peak, off))
     return ann_by_type
-
-def plot_annotations(signal, ann_by_type, fs):
+def plot_annotations(signal, ann_by_type, rspt_annotations, fs):
+    import matplotlib.pyplot as plt
     t = np.arange(len(signal)) / fs
-    plt.figure(figsize=(15, 6))
-    plt.plot(t, signal, label='ECG (lead I)', linewidth=1)
+
+    plt.figure(figsize=(15, 8))
+
+    # --- 1. subplot: QTDB annotációk ---
+    ax1 = plt.subplot(2, 1, 1)
+    ax1.plot(t, signal, label='ECG (lead I)', linewidth=1)
 
     colors = {'p': 'g', 'N': 'b', 't': 'c'}
     markers = {'on': 'o', 'peak': 'x', 'off': '^'}
@@ -46,20 +50,60 @@ def plot_annotations(signal, ann_by_type, fs):
     for wave_type, triples in ann_by_type.items():
         for on, peak, off in triples:
             c = colors[wave_type]
-            plt.plot(on / fs, signal[on], c + markers['on'], label=f'{wave_type}_on')
-            plt.plot(peak / fs, signal[peak], c + markers['peak'], label=f'{wave_type}_peak')
-            plt.plot(off / fs, signal[off], c + markers['off'], label=f'{wave_type}_off')
+            ax1.plot(on / fs, signal[on], c + markers['on'], label=f'{wave_type}_on')
+            ax1.plot(peak / fs, signal[peak], c + markers['peak'], label=f'{wave_type}_peak')
+            ax1.plot(off / fs, signal[off], c + markers['off'], label=f'{wave_type}_off')
 
-    # deduplikált legenda
-    handles, labels = plt.gca().get_legend_handles_labels()
+    handles, labels = ax1.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    plt.legend(by_label.values(), by_label.keys())
-    plt.title("Annotált P-QRS-T hullámok")
-    plt.xlabel("Idő (s)")
-    plt.ylabel("mV")
-    plt.grid(True)
+    ax1.legend(by_label.values(), by_label.keys())
+    ax1.set_title("QTDB annotációk")
+    ax1.set_ylabel("mV")
+    ax1.grid(True)
+
+    # --- 2. subplot: RSPT annotációk ---
+    ax2 = plt.subplot(2, 1, 2, sharex=ax1)
+    ax2.plot(t, signal, label='ECG (lead I)', linewidth=1)
+
+    rspt_map = {}
+    for item in rspt_annotations:
+        idx_str, symbol = item.split(':')
+        idx = int(idx_str)
+        if idx not in rspt_map:
+            rspt_map[idx] = []
+        rspt_map[idx].append(symbol)
+
+    symbol_color_marker = {
+        '(': ('g', 'o'),
+        'p': ('g', 'x'),
+        ')': ('g', '^'),
+        '[': ('b', 'o'),
+        'N': ('b', 'x'),
+        ']': ('b', '^'),
+        '{': ('c', 'o'),
+        't': ('c', 'x'),
+        '}': ('c', '^'),
+    }
+
+    for idx, symbols in rspt_map.items():
+        for sym in symbols:
+            if sym in symbol_color_marker:
+                color, marker = symbol_color_marker[sym]
+                ax2.plot(idx / fs, signal[idx], color + marker, label=sym)
+
+    handles, labels = ax2.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax2.legend(by_label.values(), by_label.keys())
+    ax2.set_title("RSPT annotációk")
+    ax2.set_xlabel("Idő (s)")
+    ax2.set_ylabel("mV")
+    ax2.grid(True)
+
     plt.tight_layout()
     plt.show()
+
+
+
 
 def compute_rspt_like_stats(signal, ann_by_type, fs):
     if not all(len(ann_by_type[k]) >= 2 for k in ['p', 'N', 't']):
@@ -119,12 +163,14 @@ if __name__ == "__main__":
     signal, ann, fs = load_qtdb_record(RECORD_PATH)
     triplets = extract_structured_annotations(ann)
     ann_by_type = organize_annotations_by_type(triplets)
-    #plot_annotations(signal, ann_by_type, fs)
     result = compute_rspt_like_stats(signal, ann_by_type, fs)
     print_result(result)
 
     # RSPT analízis meghívása
     rspt_result = rspt_module.analyse_ecg(np.stack([signal, signal], axis=1), fs)
+    #print('annots1: ', ann_by_type)
+    print('annots2: ', rspt_result['annotations'])
+    plot_annotations(signal, ann_by_type, rspt_result['annotations'], fs)
     #rspt_result = rspt.analyze_ecg(ecg_signal=signal.tolist(), sampling_rate=fs, leads=[LEAD_IDX])
     print_result(rspt_result)
 
