@@ -4,12 +4,11 @@ import matplotlib.pyplot as plt
 from rspt_module import analyse_ecg
 
 # Beállítások
-data_dir    = '/media/sf_SharedFolder/QT/lobachevsky-university-electrocardiography-database-1.0.1/data'
-#data_dir    = '/media/sf_SharedFolder/QT/qt-database-1.0.0/sel301.hea'
-#data_dir    = '/media/sf_SharedFolder/QT/qt-database-1.0.0'
+#data_dir    = '/media/sf_SharedFolder/QT/lobachevsky-university-electrocardiography-database-1.0.1/data'
+data_dir    = '/media/sf_SharedFolder/QT/qt-database-1.0.0'
 
 record_name = '1'
-#record_name = 'sel301'
+record_name = 'sel301'
 ch_idx      = 1  # A megjelenítendő csatorna indexe (pl. I. elvezetés)
 
 # Jel beolvasása

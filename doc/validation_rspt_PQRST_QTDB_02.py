@@ -34,36 +34,56 @@ def organize_annotations_by_type(triplets):
     for label, on, peak, off in triplets:
         ann_by_type[label].append((on, peak, off))
     return ann_by_type
+
+
 def plot_annotations(signal, ann_by_type, rspt_annotations, fs):
     import matplotlib.pyplot as plt
-    t = np.arange(len(signal)) / fs
+    import numpy as np
+
+    # --- 1. Keressük meg az utolsó előtti komplexust (minden típusból kell legalább 2) ---
+    if not all(len(ann_by_type[k]) >= 2 for k in ['p', 'N', 't']):
+        raise ValueError("Nem található elég teljes PQRST komplexum a megjelenítéshez.")
+
+    idx = -1  # utolsó előtti
+    p_on, p_peak, p_off = ann_by_type['p'][idx]
+    r_on, r_peak, r_off = ann_by_type['N'][idx]
+    t_on, t_peak, t_off = ann_by_type['t'][idx]
+
+    # --- 2. Kivágási ablak meghatározása ±200 ms pufferral ---
+    pad = int(0.2 * fs)
+    start = max(0, min(p_on, r_on, t_on) - pad)
+    end = min(len(signal), max(p_off, r_off, t_off) + pad)
+
+    t = np.arange(start, end) / fs
+    sig_segment = signal[start:end]
 
     plt.figure(figsize=(15, 8))
 
     # --- 1. subplot: QTDB annotációk ---
     ax1 = plt.subplot(2, 1, 1)
-    ax1.plot(t, signal, label='ECG (lead I)', linewidth=1)
+    ax1.plot(t, sig_segment, label='ECG (lead I)', linewidth=1)
 
     colors = {'p': 'g', 'N': 'b', 't': 'c'}
     markers = {'on': 'o', 'peak': 'x', 'off': '^'}
 
     for wave_type, triples in ann_by_type.items():
         for on, peak, off in triples:
-            c = colors[wave_type]
-            ax1.plot(on / fs, signal[on], c + markers['on'], label=f'{wave_type}_on')
-            ax1.plot(peak / fs, signal[peak], c + markers['peak'], label=f'{wave_type}_peak')
-            ax1.plot(off / fs, signal[off], c + markers['off'], label=f'{wave_type}_off')
+            if start <= on <= end:
+                c = colors[wave_type]
+                ax1.plot(on / fs, signal[on], c + markers['on'], label=f'{wave_type}_on')
+                ax1.plot(peak / fs, signal[peak], c + markers['peak'], label=f'{wave_type}_peak')
+                ax1.plot(off / fs, signal[off], c + markers['off'], label=f'{wave_type}_off')
 
     handles, labels = ax1.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     ax1.legend(by_label.values(), by_label.keys())
-    ax1.set_title("QTDB annotációk")
+    ax1.set_title("QTDB annotációk – utolsó előtti komplexus")
     ax1.set_ylabel("mV")
     ax1.grid(True)
 
     # --- 2. subplot: RSPT annotációk ---
     ax2 = plt.subplot(2, 1, 2, sharex=ax1)
-    ax2.plot(t, signal, label='ECG (lead I)', linewidth=1)
+    ax2.plot(t, sig_segment, label='ECG (lead I)', linewidth=1)
 
     rspt_map = {}
     for item in rspt_annotations:
@@ -86,21 +106,23 @@ def plot_annotations(signal, ann_by_type, rspt_annotations, fs):
     }
 
     for idx, symbols in rspt_map.items():
-        for sym in symbols:
-            if sym in symbol_color_marker:
-                color, marker = symbol_color_marker[sym]
-                ax2.plot(idx / fs, signal[idx], color + marker, label=sym)
+        if start <= idx <= end:
+            for sym in symbols:
+                if sym in symbol_color_marker:
+                    color, marker = symbol_color_marker[sym]
+                    ax2.plot(idx / fs, signal[idx], color + marker, label=sym)
 
     handles, labels = ax2.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     ax2.legend(by_label.values(), by_label.keys())
-    ax2.set_title("RSPT annotációk")
+    ax2.set_title("RSPT annotációk – utolsó előtti komplexus")
     ax2.set_xlabel("Idő (s)")
     ax2.set_ylabel("mV")
     ax2.grid(True)
 
     plt.tight_layout()
     plt.show()
+
 
 
 
