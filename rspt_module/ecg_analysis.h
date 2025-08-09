@@ -28,4 +28,11 @@ struct ecg_analysis_result
     char status_message[64];
 };
 
-void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<std::string>& annotations, ecg_analysis_result& result);
+struct pqrst_indxes
+{
+    int32_t p[3];
+    int32_t r[3];
+    int32_t t[3];
+};
+
+void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, ecg_analysis_result& result);

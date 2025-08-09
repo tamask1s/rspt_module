@@ -85,32 +85,17 @@ def plot_annotations(signal, ann_by_type, rspt_annotations, fs):
     ax2 = plt.subplot(2, 1, 2, sharex=ax1)
     ax2.plot(t, sig_segment, label='ECG (lead I)', linewidth=1)
 
-    rspt_map = {}
-    for item in rspt_annotations:
-        idx_str, symbol = item.split(':')
-        idx = int(idx_str)
-        if idx not in rspt_map:
-            rspt_map[idx] = []
-        rspt_map[idx].append(symbol)
+    colors = {'p': 'g', 'r': 'b', 't': 'c'}
+    markers = {0: 'o', 1: 'x', 2: '^'}  # on, peak, off
 
-    symbol_color_marker = {
-        '(': ('g', 'o'),
-        'p': ('g', 'x'),
-        ')': ('g', '^'),
-        '[': ('b', 'o'),
-        'N': ('b', 'x'),
-        ']': ('b', '^'),
-        '{': ('c', 'o'),
-        't': ('c', 'x'),
-        '}': ('c', '^'),
-    }
-
-    for idx, symbols in rspt_map.items():
-        if start <= idx <= end:
-            for sym in symbols:
-                if sym in symbol_color_marker:
-                    color, marker = symbol_color_marker[sym]
-                    ax2.plot(idx / fs, signal[idx], color + marker, label=sym)
+    for ann in rspt_annotations:
+        for wave_type in ['p', 'r', 't']:
+            if wave_type in ann:
+                for pos_idx, sample_idx in enumerate(ann[wave_type]):
+                    if sample_idx >= 0 and start <= sample_idx <= end:
+                        c = colors[wave_type]
+                        m = markers[pos_idx]
+                        ax2.plot(sample_idx / fs, signal[sample_idx], c + m, label=f'{wave_type}_{["on","peak","off"][pos_idx]}')
 
     handles, labels = ax2.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
@@ -122,7 +107,6 @@ def plot_annotations(signal, ann_by_type, rspt_annotations, fs):
 
     plt.tight_layout()
     plt.show()
-
 
 
 

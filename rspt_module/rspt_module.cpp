@@ -155,12 +155,22 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
 
     // 3) Analyse eredményének előkészítése
     ecg_analysis_result result;
-    std::vector<std::string> annotations;
+    std::vector<pqrst_indxes> annotations;
     analyse_ecg_multichannel(data_ptrs.data(), (unsigned int)nr_channels, (unsigned int)len, sampling_rate, peak_indexes, annotations, result);
+
+    py::list py_annotations;
+    for (const auto& ann : annotations)
+    {
+        py::dict complex;
+        complex["p"] = py::make_tuple(ann.p[0], ann.p[1], ann.p[2]);
+        complex["r"] = py::make_tuple(ann.r[0], ann.r[1], ann.r[2]);
+        complex["t"] = py::make_tuple(ann.t[0], ann.t[1], ann.t[2]);
+        py_annotations.append(complex);
+    }
 
     // 4) Eredmények Python dict-be töltése
     py::dict output;
-    output["annotations"] = annotations;
+    output["annotations"] = py_annotations;
     output["rr_interval_ms"]       = result.rr_interval_ms;
     output["rr_variation_ms"]      = result.rr_variation_ms;
     output["heart_rate_bpm"]       = result.heart_rate_bpm;

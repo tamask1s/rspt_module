@@ -172,20 +172,25 @@ static void fill_analysis_result(ecg_analysis_result& result, const double** ecg
     result.horizontal_plane_axis_deg = 0.0;
 }
 
-static void fill_annotations(vector<string>& annotations, const pqrst_positions& pos)
+static void fill_annotations(std::vector<pqrst_indxes>& annotations, const pqrst_positions& pos)
 {
     annotations.clear();
-    annotations.push_back(to_string(pos.p_on_idx) + ":(");
-    annotations.push_back(to_string(pos.p_idx) + ":p");
-    annotations.push_back(to_string(pos.p_off_idx) + ":)");
 
-    annotations.push_back(to_string(pos.q_idx) + ":[");
-    annotations.push_back(to_string(pos.r_idx) + ":N");
-    annotations.push_back(to_string(pos.s_idx) + ":]");
+    pqrst_indxes ann;
 
-    annotations.push_back(to_string(pos.t_on_idx) + ":{");
-    annotations.push_back(to_string(pos.t_idx) + ":t");
-    annotations.push_back(to_string(pos.t_off_idx) + ":}");
+    ann.p[0] = pos.p_on_idx;
+    ann.p[1] = pos.p_idx;
+    ann.p[2] = pos.p_off_idx;
+
+    ann.r[0] = pos.q_idx;
+    ann.r[1] = pos.r_idx;
+    ann.r[2] = pos.s_idx;
+
+    ann.t[0] = pos.t_on_idx;
+    ann.t[1] = pos.t_idx;
+    ann.t[2] = pos.t_off_idx;
+
+    annotations.push_back(ann);
 }
 
 static void check_sinus_rhythm(const vector<double>& rr_intervals, double rr_mean, double max_rr, double min_rr, double sampling_rate, ecg_analysis_result& result)
@@ -219,7 +224,7 @@ static void calculate_rr_statistics(const vector<unsigned int>& peak_indexes, do
     check_sinus_rhythm(rr_intervals, result.rr_interval_ms, max_rr, min_rr, sampling_rate, result);
 }
 
-void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const vector<unsigned int>& peak_indexes, vector<string>& annotations, ecg_analysis_result& result)
+void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, ecg_analysis_result& result)
 {
     annotations.clear();
     result.analysis_status = 0;
