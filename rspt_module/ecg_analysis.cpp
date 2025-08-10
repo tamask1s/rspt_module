@@ -42,15 +42,15 @@ static int find_max_from_to(const double* signal, unsigned int from, unsigned in
 
 struct pqrst_positions
 {
-    unsigned int p_on_idx;
-    unsigned int p_idx;
-    unsigned int p_off_idx;
-    unsigned int q_idx;
-    unsigned int r_idx;
-    unsigned int s_idx;
-    unsigned int t_on_idx;
-    unsigned int t_idx;
-    unsigned int t_off_idx;
+    int p_on_idx;
+    int p_idx;
+    int p_off_idx;
+    int q_idx;
+    int r_idx;
+    int s_idx;
+    int t_on_idx;
+    int t_idx;
+    int t_off_idx;
 };
 
 static pqrst_positions detect_pqrst_positions(const double* lead2, unsigned int r_idx, double sampling_rate, unsigned int nr_samples)
@@ -175,22 +175,12 @@ static void fill_analysis_result(ecg_analysis_result& result, const double** ecg
 static void fill_annotations(std::vector<pqrst_indxes>& annotations, const pqrst_positions& pos)
 {
     annotations.clear();
-
-    pqrst_indxes ann;
-
-    ann.p[0] = pos.p_on_idx;
-    ann.p[1] = pos.p_idx;
-    ann.p[2] = pos.p_off_idx;
-
-    ann.r[0] = pos.q_idx;
-    ann.r[1] = pos.r_idx;
-    ann.r[2] = pos.s_idx;
-
-    ann.t[0] = pos.t_on_idx;
-    ann.t[1] = pos.t_idx;
-    ann.t[2] = pos.t_off_idx;
-
-    annotations.push_back(ann);
+    annotations.push_back(
+    {
+        {pos.p_on_idx, pos.p_idx, pos.p_off_idx},
+        {pos.q_idx, pos.r_idx, pos.s_idx},
+        {pos.t_on_idx, pos.t_idx, pos.t_off_idx}
+    });
 }
 
 static void check_sinus_rhythm(const vector<double>& rr_intervals, double rr_mean, double max_rr, double min_rr, double sampling_rate, ecg_analysis_result& result)
