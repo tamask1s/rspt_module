@@ -53,16 +53,13 @@ struct pqrst_positions
     int t_off_idx;
 };
 
-unsigned int find_min_with_baseline_correction(
-    const double* signal,
-    unsigned int start_idx,
-    unsigned int end_idx)
+unsigned int find_min_with_baseline_correction(const double* signal, unsigned int start_idx, unsigned int end_idx)
 {
     if (end_idx <= start_idx) return start_idx;
 
-    double x1 = static_cast<double>(start_idx);
+    double x1 = start_idx;
     double y1 = signal[start_idx];
-    double x2 = static_cast<double>(end_idx);
+    double x2 = end_idx;
     double y2 = signal[end_idx];
 
     double m = (y2 - y1) / (x2 - x1);   // meredekség
@@ -73,7 +70,7 @@ unsigned int find_min_with_baseline_correction(
 
     for (unsigned int i = start_idx; i <= end_idx; ++i)
     {
-        double baseline = m * static_cast<double>(i) + b;
+        double baseline = m * (double)(i) + b;
         double corrected = signal[i] - baseline;
         if (corrected < min_val)
         {
@@ -82,6 +79,63 @@ unsigned int find_min_with_baseline_correction(
         }
     }
     return min_idx;
+}
+
+unsigned int find_max_with_baseline_correction(const double* signal, unsigned int start_idx, unsigned int end_idx)
+{
+    if (end_idx <= start_idx) return start_idx;
+
+    double x1 = start_idx;
+    double y1 = signal[start_idx];
+    double x2 = end_idx;
+    double y2 = signal[end_idx];
+
+    double m = (y2 - y1) / (x2 - x1);
+    double b = y1 - m * x1;
+
+    double max_val = std::numeric_limits<double>::lowest();
+    unsigned int max_idx = start_idx;
+
+    for (unsigned int i = start_idx; i <= end_idx; ++i)
+    {
+        double corrected = signal[i] - (m * (double)i + b);
+        if (corrected > max_val)
+        {
+            max_val = corrected;
+            max_idx = i;
+        }
+    }
+    return max_idx;
+}
+
+unsigned int find_isoelectric_point_before(const double* signal, unsigned int start_idx, unsigned int peak_idx, double tolerance = 0.05)
+{
+    if (peak_idx <= start_idx) return start_idx;
+
+    double peak_val = signal[peak_idx];
+
+    for (int i = static_cast<int>(peak_idx); i >= static_cast<int>(start_idx); --i)
+    {
+        if (std::fabs(signal[i]) <= std::fabs(peak_val) * tolerance)
+            return i;
+    }
+
+    return start_idx;
+}
+
+unsigned int find_isoelectric_point_after(const double* signal, unsigned int peak_idx, unsigned int end_idx, double tolerance = 0.05)
+{
+    if (end_idx <= peak_idx) return end_idx;
+
+    double peak_val = signal[peak_idx];
+
+    for (unsigned int i = peak_idx; i <= end_idx; ++i)
+    {
+        if (std::fabs(signal[i]) <= std::fabs(peak_val) * tolerance)
+            return i;
+    }
+
+    return end_idx;
 }
 
 static pqrst_positions detect_pqrst_positions(const double* lead2, unsigned int r_idx, double sampling_rate, unsigned int nr_samples)
@@ -109,41 +163,31 @@ static pqrst_positions detect_pqrst_positions(const double* lead2, unsigned int 
 
     // P
     unsigned int p_search_start = (r_idx > 0.25 * sampling_rate) ? (r_idx - 0.25 * sampling_rate) : 0;
-    unsigned int p_search_end = (r_idx > 0.10 * sampling_rate) ? (r_idx - 0.10 * sampling_rate) : 0;
-    pos.p_idx = find_max_from_to(lead2, p_search_start + 1, p_search_end, nr_samples);
-    double p_val = lead2[pos.p_idx];
-    double half_p_val = p_val * 0.15;
+    unsigned int p_search_end = pos.q_idx;
 
-    pos.p_on_idx = pos.p_idx;
-    for (int i = pos.p_idx; i >= (int)p_search_start; --i)
-        if (lead2[i] < half_p_val)
-        {
-            pos.p_on_idx = i;
-            break;
-        }
-
-    pos.p_off_idx = pos.p_idx;
-    unsigned int p_off_limit = std::min(pos.p_idx + 0.25 * sampling_rate, (double)r_idx);
-    for (unsigned int i = pos.p_idx + 1; i <= p_off_limit; ++i)
-        if (lead2[i] < half_p_val)
-        {
-            pos.p_off_idx = i;
-            break;
-        }
+    pos.p_idx = find_max_with_baseline_correction(lead2, p_search_start + 1, p_search_end);
+    pos.p_on_idx = find_min_with_baseline_correction(lead2, p_search_start, pos.p_idx);
+    pos.p_off_idx = find_min_with_baseline_correction(lead2, pos.p_idx, pos.q_idx);
 
     return pos;
 }
 
-static void fill_analysis_result(ecg_analysis_result& result, const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples, double sampling_rate, const pqrst_positions& pos)
+static void fill_analysis_result(ecg_analysis_result& result, const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples, double sampling_rate, pqrst_positions& pos)
 {
-    result.pr_interval_ms = ((pos.q_idx - pos.p_on_idx) / sampling_rate) * 1000.0;
+    result.pr_interval_ms = ((pos.q_idx - pos.p_off_idx) / sampling_rate) * 1000.0;
     result.p_wave_duration_ms = ((pos.p_off_idx - pos.p_on_idx) / sampling_rate) * 1000.0;
-    result.qrs_duration_ms = ((pos.s_idx - pos.q_idx) / sampling_rate) * 1000.0;
-    result.qt_interval_ms = ((pos.t_idx - pos.q_idx) / sampling_rate) * 1000.0;
+    unsigned int window_isoelectric_search = 0.005 * sampling_rate;
+    int qrs_start = find_isoelectric_point_before(ecg_signal[1], pos.q_idx - window_isoelectric_search, pos.q_idx);
+    window_isoelectric_search = 0.02 * sampling_rate;
+    int qrs_end = find_isoelectric_point_after(ecg_signal[1], pos.s_idx, pos.s_idx + window_isoelectric_search);
+    pos.q_idx = qrs_start;
+    pos.s_idx = qrs_end;
+    result.qrs_duration_ms = ((qrs_end - qrs_start) / sampling_rate) * 1000.0;
+    result.qt_interval_ms = ((pos.t_off_idx - pos.q_idx) / sampling_rate) * 1000.0;
 
     double rr_sec = result.rr_interval_ms / 1000.0;
     result.qtc_interval_ms = (rr_sec > 0.0) ? result.qt_interval_ms / std::sqrt(rr_sec) : 0.0;
-    result.t_wave_duration_ms = ((pos.t_off_idx - pos.t_idx) / sampling_rate) * 1000.0;
+    result.t_wave_duration_ms = ((pos.t_off_idx - pos.t_on_idx) / sampling_rate) * 1000.0;
 
     unsigned int st_point = pos.q_idx + 0.06 * sampling_rate;
     if (st_point >= nr_samples) st_point = nr_samples - 1;
@@ -229,6 +273,7 @@ static void calculate_rr_statistics(const vector<unsigned int>& peak_indexes, do
     }
 
     result.rr_interval_ms = total_ms / rr_intervals.size();
+    //result.rr_interval_ms = (peak_indexes[peak_indexes.size() - 2] - peak_indexes[peak_indexes.size() - 3]) / sampling_rate * 1000.0;
     result.rr_variation_ms = max_rr - min_rr;
     //result.rr_interval_ms = ((last_idx - peak_indexes.front()) / sampling_rate / (peak_indexes.size() - 1)) * 1000.0;
     result.heart_rate_bpm = (result.rr_interval_ms > 0.0) ? 60000.0 / result.rr_interval_ms : 0.0;

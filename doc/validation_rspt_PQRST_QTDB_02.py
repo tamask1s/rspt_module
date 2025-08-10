@@ -124,7 +124,7 @@ def compute_rspt_like_stats(signal, ann_by_type, fs):
     rr_interval = (ann_by_type['N'][i+1][1] - r_peak) * 1000 / fs
     rr_variation = abs((ann_by_type['N'][i+1][1] - ann_by_type['N'][i-1][1]) * 1000 / 2 / fs)
     hr = 60000 / rr_interval
-    pr_interval = (r_peak - p_on) * 1000 / fs
+    pr_interval = (r_on - p_off) * 1000 / fs
     qrs_duration = (r_off - r_on) * 1000 / fs
     qt_interval = (t_off - r_on) * 1000 / fs
     qtc = qt_interval / np.sqrt(rr_interval / 1000)
