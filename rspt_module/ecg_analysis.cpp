@@ -53,6 +53,37 @@ struct pqrst_positions
     int t_off_idx;
 };
 
+unsigned int find_min_with_baseline_correction(
+    const double* signal,
+    unsigned int start_idx,
+    unsigned int end_idx)
+{
+    if (end_idx <= start_idx) return start_idx;
+
+    double x1 = static_cast<double>(start_idx);
+    double y1 = signal[start_idx];
+    double x2 = static_cast<double>(end_idx);
+    double y2 = signal[end_idx];
+
+    double m = (y2 - y1) / (x2 - x1);   // meredekség
+    double b = y1 - m * x1;             // y-metszéspont
+
+    double min_val = std::numeric_limits<double>::max();
+    unsigned int min_idx = start_idx;
+
+    for (unsigned int i = start_idx; i <= end_idx; ++i)
+    {
+        double baseline = m * static_cast<double>(i) + b;
+        double corrected = signal[i] - baseline;
+        if (corrected < min_val)
+        {
+            min_val = corrected;
+            min_idx = i;
+        }
+    }
+    return min_idx;
+}
+
 static pqrst_positions detect_pqrst_positions(const double* lead2, unsigned int r_idx, double sampling_rate, unsigned int nr_samples)
 {
     pqrst_positions pos{};
@@ -72,7 +103,9 @@ static pqrst_positions detect_pqrst_positions(const double* lead2, unsigned int 
     unsigned int t_search_start = r_idx + 0.15 * sampling_rate;
     unsigned int t_search_end = std::min(r_idx + 0.40 * sampling_rate, (double)(nr_samples - 1));
     pos.t_idx = find_max_from_to(lead2, t_search_start + 1, t_search_end, nr_samples);
-    pos.t_on_idx = find_min_from_to(lead2, t_search_start, pos.t_idx, nr_samples);
+    pos.t_on_idx = find_min_with_baseline_correction(lead2, t_search_start, pos.t_idx);
+    unsigned int t_offset_end = std::min(pos.t_idx + (int)(0.20 * sampling_rate), (int)nr_samples - 1);
+    pos.t_off_idx = find_min_with_baseline_correction(lead2, pos.t_idx, t_offset_end);
 
     // P
     unsigned int p_search_start = (r_idx > 0.25 * sampling_rate) ? (r_idx - 0.25 * sampling_rate) : 0;
@@ -97,18 +130,6 @@ static pqrst_positions detect_pqrst_positions(const double* lead2, unsigned int 
             pos.p_off_idx = i;
             break;
         }
-
-    // T off
-    unsigned int t_offset_end = std::min(pos.t_idx + 0.20 * sampling_rate, (double)(nr_samples - 1));
-    pos.t_off_idx = pos.t_idx;
-    for (unsigned int i = pos.t_idx + 1; i <= t_offset_end; ++i)
-    {
-        if (std::fabs(lead2[i] - 0.0) < 0.05 * std::fabs(lead2[pos.t_idx]))
-        {
-            pos.t_off_idx = i;
-            break;
-        }
-    }
 
     return pos;
 }
