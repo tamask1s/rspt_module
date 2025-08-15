@@ -188,8 +188,19 @@ if __name__ == "__main__":
         "p_wave_duration_ms", "t_wave_duration_ms"
     ]
 
-    for key in keys_to_compare:
-        own_val = result.get(key)
-        rspt_val = rspt_result.get(key)
-        diff = abs(own_val - rspt_val) if own_val is not None and rspt_val is not None else None
-        print(f"{key:<25} QTDB: {own_val:<10.2f} | RSPT: {rspt_val:<10.2f} | Δ: {diff:.2f}" if diff is not None else f"{key:<25} Érték hiányzik.")
+#    for key in keys_to_compare:
+#        own_val = result.get(key)
+#        rspt_val = rspt_result.get(key)
+#        diff = abs(own_val - rspt_val) if own_val is not None and rspt_val is not None else None
+#        print(f"{key:<25} QTDB: {own_val:<10.2f} | RSPT: {rspt_val:<10.2f} | Δ: {diff:.2f}" if diff is not None else f"{key:<25} Érték hiányzik.")
+
+for key in keys_to_compare:
+    own_val = result.get(key)
+    rspt_val = rspt_result.get(key)
+
+    if own_val is not None and rspt_val is not None:
+        diff = abs(own_val - rspt_val)
+        pct_diff = (diff / rspt_val * 100) if rspt_val != 0 else float('nan')
+        print(f"{key:<25} QTDB: {own_val:<10.2f} | RSPT: {rspt_val:<10.2f} | Δ: {diff:<8.2f} | Δ%: {pct_diff:.2f}%")
+    else:
+        print(f"{key:<25} Érték hiányzik.")
