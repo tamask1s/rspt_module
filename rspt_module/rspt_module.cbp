@@ -30,8 +30,8 @@
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
-			<Add option="-std=gnu++11" />
-			<Add option="-std=c11" />
+			<Add option="-std=gnu++17" />
+			<Add option="-std=c17" />
 			<Add option="-fexceptions" />
 			<Add option="-D_WIN32_WINNT=0x0501" />
 		</Compiler>

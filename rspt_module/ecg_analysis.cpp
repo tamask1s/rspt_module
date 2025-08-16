@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iostream>
 #include <numeric>
+#include <string.h>
 
 using namespace std;
 
@@ -138,7 +139,186 @@ unsigned int find_isoelectric_point_after(const double* signal, unsigned int pea
     return end_idx;
 }
 
-static pqrst_positions detect_pqrst_positions(const double* lead2, unsigned int r_idx, double sampling_rate, unsigned int nr_samples)
+double compute_rms(const double* sig, size_t sig_size, size_t start, size_t end)
+{
+    if (end > sig_size) end = sig_size;
+    if (start >= end) return 0.0;
+    double sum_sq = 0.0;
+    for (size_t i = start; i < end; ++i)
+        sum_sq += sig[i] * sig[i];
+    return std::sqrt(sum_sq / (end - start));
+}
+
+double max_abs_peak(const double* sig, size_t sig_size, size_t start, size_t end, int& peak_indx, int& sign)
+{
+    if (end > sig_size) end = sig_size;
+    if (start >= end) return 0.0;
+    double max_val = -std::numeric_limits<double>::infinity();
+    double min_val = std::numeric_limits<double>::infinity();
+    int max_indx = -1;
+    int min_indx = -1;
+    for (size_t i = start; i < end; ++i)
+    {
+        if (sig[i] > max_val)
+        {
+            max_val = sig[i];
+            max_indx = i;
+        }
+        if (sig[i] < min_val)
+        {
+            min_val = sig[i];
+            min_indx = i;
+        }
+    }
+    if (max_val > -min_val)
+    {
+        peak_indx = max_indx;
+        sign = 1;
+        return max_val;
+    }
+    else
+    {
+        peak_indx = min_indx;
+        sign = -1;
+        return min_val;
+    }
+}
+
+int xcor_align(const double** leads, size_t nr_samples, size_t ref_ch, size_t ch, size_t t_start, size_t t_end, size_t max_lag_samples)
+{
+    if (t_end > nr_samples) t_end = nr_samples;
+    if (t_start >= t_end) return 0;
+
+    const double* ref = leads[ref_ch];
+    const double* sig = leads[ch];
+
+    double best_corr = -std::numeric_limits<double>::infinity();
+    int best_lag = 0;
+
+    for (int lag = -(int)max_lag_samples; lag <= (int)max_lag_samples; ++lag)
+    {
+        size_t start_ref = t_start;
+        size_t start_sig = t_start + lag;
+
+        if (lag < 0)
+        {
+            start_ref = t_start - lag;
+            start_sig = t_start;
+        }
+
+        size_t len = t_end - t_start;
+        if (start_ref + len > nr_samples || start_sig + len > nr_samples)
+            len = std::min(nr_samples - start_ref, nr_samples - start_sig);
+
+        if (len <= 1) continue;
+
+        double sum_ref = 0.0, sum_sig = 0.0;
+        double sum_ref2 = 0.0, sum_sig2 = 0.0;
+        double sum_cross = 0.0;
+
+        for (size_t i = 0; i < len; ++i)
+        {
+            double xr = ref[start_ref + i];
+            double xs = sig[start_sig + i];
+            sum_ref += xr;
+            sum_sig += xs;
+            sum_ref2 += xr * xr;
+            sum_sig2 += xs * xs;
+            sum_cross += xr * xs;
+        }
+
+        double num = sum_cross - (sum_ref * sum_sig) / len;
+        double den = std::sqrt((sum_ref2 - (sum_ref * sum_ref) / len) * (sum_sig2 - (sum_sig * sum_sig) / len));
+
+        if (den > 1e-12)
+        {
+            double corr = num / den;
+            if (corr > best_corr)
+            {
+                best_corr = corr;
+                best_lag = lag;
+            }
+        }
+    }
+
+    return best_lag;
+}
+
+void accumulate_aligned(double* res, const double* src, size_t nr_src_samples, size_t t_start, size_t t_end, int dt, double w)
+{
+    if (t_end > nr_src_samples) t_end = nr_src_samples;
+    size_t len = t_end - t_start;
+    if (len == 0) return;
+
+    for (size_t i = 0; i < len; ++i)
+    {
+        int si = (int)t_start + (int)i + dt;
+        if (si >= 0 && si < (int)nr_src_samples)
+        {
+            res[i] += w * src[si];
+        }
+    }
+}
+
+struct LeadScore
+{
+    size_t ch;
+    double snr;
+    int sign;
+    int dt;
+}; // sign: +1/-1, dt: mintabeli eltolás
+
+int create_ideal_signal(double* res, const double** leads, size_t nr_channels, size_t nr_samples, double sampling_rate, size_t t_start, size_t t_end, size_t iso_start, size_t iso_end)
+{
+    if (t_end > nr_samples) t_end = nr_samples;
+    size_t len = t_end - t_start;
+    if (len == 0) return -1;
+
+    // 1) SNR becslés és rangsor
+    std::vector<LeadScore> scores;
+    scores.reserve(nr_channels);
+    for (size_t ch = 0; ch < nr_channels; ++ch)
+    {
+        double sigma = compute_rms(leads[ch], nr_samples, iso_start, iso_end);
+        int peak_indx;
+        int sign;
+        double peak = max_abs_peak(leads[ch], nr_samples, t_start, t_end, peak_indx, sign);
+        double snr = peak / (sigma + 1e-9);
+        scores.push_back({ch, snr, sign, 0});
+    }
+
+    std::sort(scores.begin(), scores.end(), [](auto &a, auto &b)
+    {
+        return a.snr > b.snr;
+    });
+    int K = std::min(3, (int)scores.size());
+
+    // 2) időigazítás a legjobb csatornához
+    int ref_ch = scores[0].ch;
+    for (int k = 1; k < K; ++k)
+    {
+        int ch = scores[k].ch;
+        int max_lag_samples = 0.015 * sampling_rate;
+        scores[k].dt = xcor_align(leads, nr_samples, ref_ch, ch, t_start, t_end, max_lag_samples);
+    }
+
+    // 3) súlyozott összeg
+    std::fill(res, res + len, 0.0);
+    double wsum = 0.0;
+    for (int k = 0; k < K; ++k)
+        wsum += scores[k].snr;
+
+    for (int k = 0; k < K; ++k)
+    {
+        double w = scores[k].snr / (wsum + 1e-12);
+        cout << "scores[k].sign: " << scores[k].sign << endl;
+        accumulate_aligned(res, leads[scores[k].ch], nr_samples, t_start, t_end, scores[k].dt, scores[k].sign * w);
+    }
+
+    return 0;
+}
+
+static pqrst_positions detect_pqrst_positions(const double** leads, unsigned int nr_ch, unsigned int r_idx, double sampling_rate, unsigned int nr_samples)
 {
     pqrst_positions pos{};
     pos.r_idx = r_idx;
@@ -146,28 +326,36 @@ static pqrst_positions detect_pqrst_positions(const double* lead2, unsigned int 
     // Q
     unsigned int window_q = 0.04 * sampling_rate;
     unsigned int start_q = (r_idx > window_q) ? (r_idx - window_q) : 0;
-    pos.q_idx = find_min_from_to(lead2, start_q, r_idx, nr_samples);
+    pos.q_idx = find_min_from_to(leads[0], start_q, r_idx, nr_samples);
 
     // S
     unsigned int window_s = 0.04 * sampling_rate;
     unsigned int end_s = std::min(r_idx + window_s, nr_samples - 1);
-    pos.s_idx = find_min_from_to(lead2, r_idx, end_s, nr_samples);
+    pos.s_idx = find_min_from_to(leads[0], r_idx, end_s, nr_samples);
 
     // T
     unsigned int t_search_start = r_idx + 0.15 * sampling_rate;
     unsigned int t_search_end = std::min(r_idx + 0.40 * sampling_rate, (double)(nr_samples - 1));
-    pos.t_idx = find_max_from_to(lead2, t_search_start + 1, t_search_end, nr_samples);
-    pos.t_on_idx = find_min_with_baseline_correction(lead2, t_search_start, pos.t_idx);
-    unsigned int t_offset_end = std::min(pos.t_idx + (int)(0.20 * sampling_rate), (int)nr_samples - 1);
-    pos.t_off_idx = find_min_with_baseline_correction(lead2, pos.t_idx, t_offset_end);
+
+    size_t search_samples = t_search_end - t_search_start + 1; ///(size_t)sampling_rate * 2;
+    double sig_window[search_samples] = {};
+    create_ideal_signal(sig_window, leads, nr_ch, nr_samples, sampling_rate, t_search_start, t_search_end, t_search_start, t_search_end);
+
+    pos.t_idx = find_max_from_to(sig_window, 1, search_samples, search_samples);
+    pos.t_on_idx = find_min_with_baseline_correction(sig_window, 0, pos.t_idx);
+    unsigned int t_offset_end = std::min(pos.t_idx + (int)(0.20 * sampling_rate), (int)search_samples - 1);
+    pos.t_off_idx = find_min_with_baseline_correction(sig_window, pos.t_idx, t_offset_end);
+    pos.t_idx += t_search_start;
+    pos.t_on_idx += t_search_start;
+    pos.t_off_idx += t_search_start;
 
     // P
     unsigned int p_search_start = (r_idx > 0.25 * sampling_rate) ? (r_idx - 0.25 * sampling_rate) : 0;
     unsigned int p_search_end = pos.q_idx;
 
-    pos.p_idx = find_max_with_baseline_correction(lead2, p_search_start + 1, p_search_end);
-    pos.p_on_idx = find_min_with_baseline_correction(lead2, p_search_start, pos.p_idx);
-    pos.p_off_idx = find_min_with_baseline_correction(lead2, pos.p_idx, pos.q_idx);
+    pos.p_idx = find_max_with_baseline_correction(leads[0], p_search_start + 1, p_search_end);
+    pos.p_on_idx = find_min_with_baseline_correction(leads[0], p_search_start, pos.p_idx);
+    pos.p_off_idx = find_min_with_baseline_correction(leads[0], pos.p_idx, pos.q_idx);
 
     return pos;
 }
@@ -301,7 +489,7 @@ void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, uns
         return;
     }
 
-    pqrst_positions pos = detect_pqrst_positions(ecg_signal[lead_for_timing], peak_indexes[peak_indexes.size() - 2], sampling_rate, nr_samples_per_ch);
+    pqrst_positions pos = detect_pqrst_positions(ecg_signal, nr_ch, peak_indexes[peak_indexes.size() - 2], sampling_rate, nr_samples_per_ch);
     calculate_rr_statistics(peak_indexes, sampling_rate, result);
     fill_analysis_result(result, ecg_signal, nr_ch, nr_samples_per_ch, sampling_rate, pos);
     fill_annotations(annotations, pos);
