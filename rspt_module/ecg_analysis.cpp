@@ -69,16 +69,19 @@ unsigned int find_min_with_baseline_correction(const double* signal, unsigned in
     double min_val = std::numeric_limits<double>::max();
     unsigned int min_idx = start_idx;
 
+    cout << "---------------------------------------------------------------------" << endl;
     for (unsigned int i = start_idx; i <= end_idx; ++i)
     {
         double baseline = m * (double)(i) + b;
         double corrected = signal[i] - baseline;
+        cout << corrected << " \t " << signal[i] << endl;
         if (corrected < min_val)
         {
             min_val = corrected;
             min_idx = i;
         }
     }
+
     return min_idx;
 }
 
@@ -152,36 +155,96 @@ double compute_rms(const double* sig, size_t sig_size, size_t start, size_t end)
 double max_abs_peak(const double* sig, size_t sig_size, size_t start, size_t end, int& peak_indx, int& sign)
 {
     if (end > sig_size) end = sig_size;
-    if (start >= end) return 0.0;
-    double max_val = -std::numeric_limits<double>::infinity();
-    double min_val = std::numeric_limits<double>::infinity();
-    int max_indx = -1;
-    int min_indx = -1;
-    for (size_t i = start; i < end; ++i)
+    if (start >= end)
     {
-        if (sig[i] > max_val)
-        {
-            max_val = sig[i];
-            max_indx = i;
-        }
-        if (sig[i] < min_val)
-        {
-            min_val = sig[i];
-            min_indx = i;
-        }
-    }
-    if (max_val > -min_val)
-    {
-        peak_indx = max_indx;
+        peak_indx = (int)start;
         sign = 1;
-        return max_val;
+        return 0.0;
     }
-    else
+
+    const size_t n = end - start;
+    if (n < 3)
     {
-        peak_indx = min_indx;
-        sign = -1;
-        return min_val;
+        peak_indx = (int)start;
+        sign = 1;
+        return 0.0;
     }
+
+    // 1) Másolás + lineáris detrend (vonal kiegyenesítés)
+    std::vector<double> y(n);
+    for (size_t i = 0; i < n; ++i) y[i] = sig[start + i];
+
+    const double y0 = y.front();
+    const double yN = y.back();
+    const double denom = (n > 1) ? double(n - 1) : 1.0;
+    for (size_t i = 0; i < n; ++i)
+    {
+        double baseline = y0 + (yN - y0) * (double(i) / denom);
+        y[i] -= baseline;
+    }
+
+    // 2) Simítás: kétszeres középre igazított mozgóátlag (gyors komponensek elnyomása)
+    auto smooth_centered = [&](const std::vector<double>& in, int win)->std::vector<double>
+    {
+        std::vector<double> out(n);
+        if (win < 3) return in;
+        if ((win & 1) == 0) ++win; // legyen páratlan
+        const int h = win / 2;
+
+        // prefix összegek a gyors közép-átlaghoz
+        std::vector<double> ps(n + 1, 0.0);
+        for (size_t i = 0; i < n; ++i) ps[i + 1] = ps[i] + in[i];
+
+        for (size_t i = 0; i < n; ++i)
+        {
+            int a = (int)i - h;
+            if (a < 0) a = 0;
+            int b = (int)i + h;
+            if (b >= (int)n) b = (int)n - 1;
+            double sum = ps[b + 1] - ps[a];
+            out[i] = sum / double(b - a + 1);
+        }
+        return out;
+    };
+
+    int w1 = std::max<int>(3, int(n / 20)); // ~5% ablak
+    if ((w1 & 1) == 0) ++w1;
+    std::vector<double> y1 = smooth_centered(y, w1);
+
+    int w2 = std::max<int>(3, w1 / 2);
+    if ((w2 & 1) == 0) ++w2;
+    std::vector<double> y2 = smooth_centered(y1, w2);
+
+    // 3) Keresés csak a középső sávban (edge-ek kerülése)
+    size_t margin = std::max<size_t>(1, n / 10);           // 10% szélek elhagyása
+    size_t lo = margin;
+    size_t hi = (n > margin) ? (n - 1 - margin) : (n - 1);
+    if (hi <= lo)
+    {
+        lo = 0;
+        hi = n - 1;
+    }
+
+    double best_score = -std::numeric_limits<double>::infinity();
+    size_t best_i = lo;
+    const double center = 0.5 * (lo + hi);
+
+    for (size_t i = lo; i <= hi; ++i)
+    {
+        // enyhe középre súlyozás, hogy a középsáv preferált legyen
+        double centrality = 1.0 - 0.25 * std::fabs(double(i) - center) / (center + 1e-9);
+        double score = std::fabs(y2[i]) * centrality;
+        if (score > best_score)
+        {
+            best_score = score;
+            best_i = i;
+        }
+    }
+
+    const double val = y2[best_i];
+    peak_indx = int(start + best_i);
+    sign = (val >= 0.0) ? 1 : -1;
+    return std::fabs(val);
 }
 
 int xcor_align(const double** leads, size_t nr_samples, size_t ref_ch, size_t ch, size_t t_start, size_t t_end, size_t max_lag_samples)
@@ -246,14 +309,14 @@ int xcor_align(const double** leads, size_t nr_samples, size_t ref_ch, size_t ch
 
 void accumulate_aligned(double* res, const double* src, size_t nr_src_samples, size_t t_start, size_t t_end, int dt, double w)
 {
-    if (t_end > nr_src_samples) t_end = nr_src_samples;
+//    if (t_end > nr_src_samples) t_end = nr_src_samples;
     size_t len = t_end - t_start;
-    if (len == 0) return;
+//    if (len == 0) return;
 
     for (size_t i = 0; i < len; ++i)
     {
-        int si = (int)t_start + (int)i + dt;
-        if (si >= 0 && si < (int)nr_src_samples)
+        int si = (int)t_start + (int)i + 0;
+//        if (si >= 0 && si < (int)nr_src_samples)
         {
             res[i] += w * src[si];
         }
@@ -279,6 +342,9 @@ int create_ideal_signal(double* res, const double** leads, size_t nr_channels, s
     scores.reserve(nr_channels);
     for (size_t ch = 0; ch < nr_channels; ++ch)
     {
+///        cout << "---------------------------------------------------------------------" << endl;
+        ///     for (size_t i = t_start; i < t_end; ++i)
+        ///      cout << leads[ch][i] << endl;
         double sigma = compute_rms(leads[ch], nr_samples, iso_start, iso_end);
         int peak_indx;
         int sign;
@@ -311,8 +377,8 @@ int create_ideal_signal(double* res, const double** leads, size_t nr_channels, s
     for (int k = 0; k < K; ++k)
     {
         double w = scores[k].snr / (wsum + 1e-12);
-        cout << "scores[k].sign: " << scores[k].sign << endl;
         accumulate_aligned(res, leads[scores[k].ch], nr_samples, t_start, t_end, scores[k].dt, scores[k].sign * w);
+        cout << "scores[k].sign: " << scores[k].sign << " leads[scores[k].ch] " << leads[scores[k].ch][0] << " res[0] " << res[0] << endl;
     }
 
     return 0;
@@ -334,10 +400,11 @@ static pqrst_positions detect_pqrst_positions(const double** leads, unsigned int
     pos.s_idx = find_min_from_to(leads[0], r_idx, end_s, nr_samples);
 
     // T
-    unsigned int t_search_start = r_idx + 0.15 * sampling_rate;
+    unsigned int t_search_start = pos.s_idx;
+    cout << "XXXXXXXXXXXXXXXXXXXXXXXXXXXXt_search_start " << t_search_start << " pos.s_idx " << pos.s_idx << " sampling_rate " << sampling_rate << endl;
     unsigned int t_search_end = std::min(r_idx + 0.40 * sampling_rate, (double)(nr_samples - 1));
 
-    size_t search_samples = t_search_end - t_search_start + 1; ///(size_t)sampling_rate * 2;
+    size_t search_samples = t_search_end - t_search_start; ///(size_t)sampling_rate * 2;
     double sig_window[search_samples] = {};
     create_ideal_signal(sig_window, leads, nr_ch, nr_samples, sampling_rate, t_search_start, t_search_end, t_search_start, t_search_end);
 

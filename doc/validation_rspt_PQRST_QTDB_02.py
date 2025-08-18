@@ -4,12 +4,14 @@ import matplotlib.pyplot as plt
 import rspt_module
 
 RECORD_PATH = '/media/sf_SharedFolder/QT/qt-database-1.0.0/sel301'
-LEAD_IDX = 0
+RECORD_PATH = '/media/sf_SharedFolder/QT/qt-database-1.0.0/sel306'
+DISPLAY_LEAD_IDX = 1
 
 def load_qtdb_record(record_path):
     record = wfdb.rdrecord(record_path)
     ann = wfdb.rdann(record_path, 'pu1')
-    signal = record.p_signal[:, LEAD_IDX]
+    #signal = record.p_signal[:, DISPLAY_LEAD_IDX]
+    signal = record.p_signal
     return signal, ann, record.fs
 
 def extract_structured_annotations(ann):
@@ -109,8 +111,6 @@ def plot_annotations(signal, ann_by_type, rspt_annotations, fs):
     plt.show()
 
 
-
-
 def compute_rspt_like_stats(signal, ann_by_type, fs):
     if not all(len(ann_by_type[k]) >= 2 for k in ['p', 'N', 't']):
         raise ValueError("Nem található elég teljes PQRST komplexum az analízishez.")
@@ -169,14 +169,15 @@ if __name__ == "__main__":
     signal, ann, fs = load_qtdb_record(RECORD_PATH)
     triplets = extract_structured_annotations(ann)
     ann_by_type = organize_annotations_by_type(triplets)
-    result = compute_rspt_like_stats(signal, ann_by_type, fs)
+    result = compute_rspt_like_stats(signal[:, DISPLAY_LEAD_IDX], ann_by_type, fs)
     print_result(result)
 
     # RSPT analízis meghívása
-    rspt_result = rspt_module.analyse_ecg(np.stack([signal, signal], axis=1), fs)
+    #rspt_result = rspt_module.analyse_ecg(np.stack([signal, signal], axis=1), fs)
+    rspt_result = rspt_module.analyse_ecg(signal, fs)
     #print('annots1: ', ann_by_type)
     print('annots2: ', rspt_result['annotations'])
-    plot_annotations(signal, ann_by_type, rspt_result['annotations'], fs)
+    plot_annotations(signal[:, DISPLAY_LEAD_IDX], ann_by_type, rspt_result['annotations'], fs)
     #rspt_result = rspt.analyze_ecg(ecg_signal=signal.tolist(), sampling_rate=fs, leads=[LEAD_IDX])
     print_result(rspt_result)
 
