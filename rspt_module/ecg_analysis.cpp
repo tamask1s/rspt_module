@@ -54,6 +54,66 @@ struct pqrst_positions
     int t_off_idx;
 };
 
+void write_binmx_to_file(const char* filename, const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate)
+{
+    FILE* f = fopen(filename, "wb");
+    if (!f)
+    {
+        perror("fopen");
+        return;
+    }
+
+    // --- HEADER ---
+    // 0–7: sampling rate
+    fwrite(&sampling_rate, sizeof(double), 1, f);
+
+    // 8–11: nr_channels (int32)
+    int32_t ch = (int32_t)nr_channels;
+    fwrite(&ch, sizeof(int32_t), 1, f);
+
+    // 12–23: padding (zeros)
+    uint8_t padding[12] = {0};
+    fwrite(padding, sizeof(padding), 1, f);
+
+    // --- DATA ---
+    // interleaved: ch0_s0, ch1_s0, ..., chN_s0, ch0_s1, ...
+    for (size_t s = 0; s < nr_samples_per_channel; ++s)
+    {
+        for (size_t c = 0; c < nr_channels; ++c)
+        {
+            double value = data[c][s];
+            fwrite(&value, sizeof(double), 1, f);
+        }
+    }
+
+    fclose(f);
+}
+
+void write_binmx_to_file_1ch(const char* filename, const double* data, size_t nr_samples, double sampling_rate)
+{
+    FILE* f = fopen(filename, "wb");
+    if (!f)
+    {
+        perror("fopen");
+        return;
+    }
+
+    // --- HEADER ---
+    fwrite(&sampling_rate, sizeof(double), 1, f);
+
+    int32_t nr_channels = 1;  // csak 1 csatorna
+    fwrite(&nr_channels, sizeof(int32_t), 1, f);
+
+    uint8_t padding[12] = {0};
+    fwrite(padding, sizeof(padding), 1, f);
+
+    // --- DATA ---
+    // csak lineárisan kiírjuk a mintákat
+    fwrite(data, sizeof(double), nr_samples, f);
+
+    fclose(f);
+}
+
 unsigned int find_min_with_baseline_correction(const double* signal, unsigned int start_idx, unsigned int end_idx)
 {
     if (end_idx <= start_idx) return start_idx;
@@ -81,7 +141,16 @@ unsigned int find_min_with_baseline_correction(const double* signal, unsigned in
             min_idx = i;
         }
     }
-
+    //write_binmx_to_file("/media/sf_SharedFolder/test01.bin", &signal, 1, end_idx - start_idx, 250);
+    static int written = false;
+//    if (!written)
+//    {
+//        const double* tmp = &signal[start_idx];
+//        write_binmx_to_file("/media/sf_SharedFolder/test01.bin", &tmp, 1, end_idx - start_idx, 250);
+//        //write_binmx_to_file("/media/sf_SharedFolder/test01.bin", &signal, 1, end_idx - start_idx, 250);
+//        //write_binmx_to_file_1ch("/media/sf_SharedFolder/test01.bin", &signal[start_idx], end_idx - start_idx, 250);
+//    }
+    written = true;
     return min_idx;
 }
 
@@ -378,7 +447,7 @@ int create_ideal_signal(double* res, const double** leads, size_t nr_channels, s
     {
         double w = scores[k].snr / (wsum + 1e-12);
         accumulate_aligned(res, leads[scores[k].ch], nr_samples, t_start, t_end, scores[k].dt, scores[k].sign * w);
-        cout << "scores[k].sign: " << scores[k].sign << " leads[scores[k].ch] " << leads[scores[k].ch][0] << " res[0] " << res[0] << endl;
+        cout << "scores[k].sign: " << scores[k].sign << " leads[scores[k].ch] " << leads[scores[k].ch][0] << " res[0] " << res[0] << " W: " << w << endl;
     }
 
     return 0;
@@ -400,13 +469,14 @@ static pqrst_positions detect_pqrst_positions(const double** leads, unsigned int
     pos.s_idx = find_min_from_to(leads[0], r_idx, end_s, nr_samples);
 
     // T
-    unsigned int t_search_start = pos.s_idx;
+    unsigned int t_search_start = pos.s_idx;///0.15 * sampling_rate;
     cout << "XXXXXXXXXXXXXXXXXXXXXXXXXXXXt_search_start " << t_search_start << " pos.s_idx " << pos.s_idx << " sampling_rate " << sampling_rate << endl;
     unsigned int t_search_end = std::min(r_idx + 0.40 * sampling_rate, (double)(nr_samples - 1));
 
     size_t search_samples = t_search_end - t_search_start; ///(size_t)sampling_rate * 2;
     double sig_window[search_samples] = {};
     create_ideal_signal(sig_window, leads, nr_ch, nr_samples, sampling_rate, t_search_start, t_search_end, t_search_start, t_search_end);
+    write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window.bin", &leads[1][t_search_start], search_samples, 250);
 
     pos.t_idx = find_max_from_to(sig_window, 1, search_samples, search_samples);
     pos.t_on_idx = find_min_with_baseline_correction(sig_window, 0, pos.t_idx);
