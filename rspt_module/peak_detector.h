@@ -600,7 +600,7 @@ public:
             if (sign_array[i] < 0)
                 sign_array[i] = -1;
             else
-                sign_array[i] = 0;
+                sign_array[i] = 0; /// todo: check why is it more optimal to skip pozitive channels?
         }
 
         double* ecg_signal = new double[len];
