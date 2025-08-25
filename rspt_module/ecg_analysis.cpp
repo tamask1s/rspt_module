@@ -446,6 +446,7 @@ int create_ideal_signal(double* res, const double** leads, size_t nr_channels, s
     for (int k = 0; k < K; ++k)
     {
         double w = scores[k].snr / (wsum + 1e-12);
+        w = 1.0 / (double)K;
         accumulate_aligned(res, leads[scores[k].ch], nr_samples, t_start, t_end, scores[k].dt, scores[k].sign * w);
         cout << "scores[k].sign: " << scores[k].sign << " leads[scores[k].ch] " << leads[scores[k].ch][0] << " res[0] " << res[0] << " W: " << w << endl;
     }
@@ -476,7 +477,14 @@ static pqrst_positions detect_pqrst_positions(const double** leads, unsigned int
     size_t search_samples = t_search_end - t_search_start; ///(size_t)sampling_rate * 2;
     double sig_window[search_samples] = {};
     create_ideal_signal(sig_window, leads, nr_ch, nr_samples, sampling_rate, t_search_start, t_search_end, t_search_start, t_search_end);
-    write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window.bin", &leads[1][t_search_start], search_samples, 250);
+    write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window1.bin", &leads[0][t_search_start], search_samples, 250);
+    write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window2.bin", &leads[1][t_search_start], search_samples, 250);
+    write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window3.bin", sig_window, search_samples, 250);
+    const double* sig_window_[3];
+    sig_window_[0] = sig_window;
+    sig_window_[1] = &leads[0][t_search_start];
+    sig_window_[2] = &leads[1][t_search_start];
+    write_binmx_to_file("/media/sf_SharedFolder/sig_window.bin", sig_window_, 3, search_samples, 250);
 
     pos.t_idx = find_max_from_to(sig_window, 1, search_samples, search_samples);
     pos.t_on_idx = find_min_with_baseline_correction(sig_window, 0, pos.t_idx);

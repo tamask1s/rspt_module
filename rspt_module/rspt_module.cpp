@@ -149,9 +149,7 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
     else
         detector.set_mode(peak_detector_offline::Mode::def);
 
-    detector.detect_multichannel(data_ptrs.data(), nr_channels, (unsigned int)len,
-                                 peak_signal.data(), filt_signal.data(), threshold_signal.data(),
-                                 &peak_indexes);
+    detector.detect_multichannel(data_ptrs.data(), nr_channels, (unsigned int)len, peak_signal.data(), filt_signal.data(), threshold_signal.data(), &peak_indexes);
 
     // 3) Analyse eredményének előkészítése
     ecg_analysis_result result;
