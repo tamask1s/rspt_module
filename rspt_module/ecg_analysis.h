@@ -1,13 +1,15 @@
 
 struct ecg_analysis_result
 {
+    double heart_rate_bpm;
     double rr_interval_ms;
     double rr_variation_ms;
-    double heart_rate_bpm;
     double pr_interval_ms;
+    double pr_segment_ms;
     double qrs_duration_ms;
     double qt_interval_ms;
     double qtc_interval_ms;
+    double st_segment_ms;
 
     double p_wave_duration_ms;
     double t_wave_duration_ms;
@@ -26,6 +28,7 @@ struct ecg_analysis_result
 
     int analysis_status;
     char status_message[64];
+    char pathologic_status[64];
 };
 
 struct pqrst_indxes

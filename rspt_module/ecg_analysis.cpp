@@ -142,7 +142,7 @@ unsigned int find_min_with_baseline_correction(const double* signal, unsigned in
         }
     }
     //write_binmx_to_file("/media/sf_SharedFolder/test01.bin", &signal, 1, end_idx - start_idx, 250);
-    static int written = false;
+//    static int written = false;
 //    if (!written)
 //    {
 //        const double* tmp = &signal[start_idx];
@@ -150,7 +150,7 @@ unsigned int find_min_with_baseline_correction(const double* signal, unsigned in
 //        //write_binmx_to_file("/media/sf_SharedFolder/test01.bin", &signal, 1, end_idx - start_idx, 250);
 //        //write_binmx_to_file_1ch("/media/sf_SharedFolder/test01.bin", &signal[start_idx], end_idx - start_idx, 250);
 //    }
-    written = true;
+//    written = true;
     return min_idx;
 }
 
@@ -507,23 +507,31 @@ static pqrst_positions detect_pqrst_positions(const double** leads, unsigned int
 
 static void fill_analysis_result(ecg_analysis_result& result, const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples, double sampling_rate, pqrst_positions& pos)
 {
-    result.pr_interval_ms = ((pos.q_idx - pos.p_off_idx) / sampling_rate) * 1000.0;
-    result.p_wave_duration_ms = ((pos.p_off_idx - pos.p_on_idx) / sampling_rate) * 1000.0;
+    result.pr_interval_ms = (pos.q_idx - pos.p_off_idx) / sampling_rate * 1000.0;
+    result.p_wave_duration_ms = (pos.p_off_idx - pos.p_on_idx) / sampling_rate * 1000.0;
     unsigned int window_isoelectric_search = 0.005 * sampling_rate;
     int qrs_start = find_isoelectric_point_before(ecg_signal[1], pos.q_idx - window_isoelectric_search, pos.q_idx);
     window_isoelectric_search = 0.02 * sampling_rate;
     int qrs_end = find_isoelectric_point_after(ecg_signal[1], pos.s_idx, pos.s_idx + window_isoelectric_search);
     pos.q_idx = qrs_start;
     pos.s_idx = qrs_end;
-    result.qrs_duration_ms = ((qrs_end - qrs_start) / sampling_rate) * 1000.0;
-    result.qt_interval_ms = ((pos.t_off_idx - pos.q_idx) / sampling_rate) * 1000.0;
+    result.qrs_duration_ms = (qrs_end - qrs_start) / sampling_rate * 1000.0;
+    result.qt_interval_ms = (pos.t_off_idx - pos.q_idx) / sampling_rate * 1000.0;
 
     double rr_sec = result.rr_interval_ms / 1000.0;
     result.qtc_interval_ms = (rr_sec > 0.0) ? result.qt_interval_ms / std::sqrt(rr_sec) : 0.0;
-    result.t_wave_duration_ms = ((pos.t_off_idx - pos.t_on_idx) / sampling_rate) * 1000.0;
+    result.t_wave_duration_ms = (pos.t_off_idx - pos.t_on_idx) / sampling_rate * 1000.0;
 
     unsigned int st_point = pos.q_idx + 0.06 * sampling_rate;
     if (st_point >= nr_samples) st_point = nr_samples - 1;
+
+    for (unsigned int ch = nr_ch; ch < 12; ++ch)
+    {
+        result.r_peak_amplitude_mV[ch] = 0.0;
+        result.s_wave_amplitude_mV[ch] = 0.0;
+        result.st_elevation_mV[ch] = 0.0;
+        result.st_depression_mV[ch] = 0.0;
+    }
 
     for (unsigned int ch = 0; ch < nr_ch && ch < 12; ++ch)
     {
@@ -556,18 +564,12 @@ static void fill_analysis_result(ecg_analysis_result& result, const double** ecg
         }
     }
 
-    for (unsigned int ch = nr_ch; ch < 12; ++ch)
-    {
-        result.r_peak_amplitude_mV[ch] = 0.0;
-        result.s_wave_amplitude_mV[ch] = 0.0;
-        result.st_elevation_mV[ch] = 0.0;
-        result.st_depression_mV[ch] = 0.0;
-    }
-
     double net_I = result.r_peak_amplitude_mV[0] - std::fabs(result.s_wave_amplitude_mV[0]);
     double net_aVF = result.r_peak_amplitude_mV[5] - std::fabs(result.s_wave_amplitude_mV[5]);
     result.frontal_plane_axis_deg = std::atan2(net_aVF, net_I) * 180.0 / M_PI;
     result.horizontal_plane_axis_deg = 0.0;
+    result.pr_segment_ms = result.pr_interval_ms - result.p_wave_duration_ms;
+    result.st_segment_ms = (pos.t_on_idx - pos.s_idx) / sampling_rate * 1000.0;;
 }
 
 static void fill_annotations(std::vector<pqrst_indxes>& annotations, const pqrst_positions& pos)
@@ -617,20 +619,27 @@ void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, uns
 {
     annotations.clear();
     result.analysis_status = 0;
+    result.pathologic_status[0] = 0;
     std::snprintf(result.status_message, sizeof(result.status_message), "OK");
 
     if (peak_indexes.size() < 2)
     {
         result.analysis_status = 1;
-        std::snprintf(result.status_message, sizeof(result.status_message), "Nincs elég R-csúcs az RR számításhoz");
+        std::snprintf(result.status_message, sizeof(result.status_message), "Not enough R peaks for RR calculation");
         return;
     }
 
-    const unsigned int lead_for_timing = 1;
-    if (lead_for_timing >= nr_ch)
+    if (!ecg_signal || nr_ch < 1)
     {
         result.analysis_status = 2;
-        std::snprintf(result.status_message, sizeof(result.status_message), "Hiányzó II. elvezetés a feldolgozáshoz");
+        std::snprintf(result.status_message, sizeof(result.status_message), "No channel data given");
+        return;
+    }
+
+    if (nr_samples_per_ch < sampling_rate)
+    {
+        result.analysis_status = 3;
+        std::snprintf(result.status_message, sizeof(result.status_message), "Not enough data samples given");
         return;
     }
 
