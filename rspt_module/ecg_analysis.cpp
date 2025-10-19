@@ -6,10 +6,17 @@
 #include <iostream>
 #include <numeric>
 #include <string.h>
+#include <cstdint>
+#include <cstddef>
+#include <limits>
 
 using namespace std;
 
 #include "ecg_analysis.h"
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 template <typename Compare>
 static int find_extreme_from_to(const double* signal, unsigned int from, unsigned int to, unsigned int length, Compare comp)
@@ -28,7 +35,7 @@ static int find_extreme_from_to(const double* signal, unsigned int from, unsigne
             val_extreme = signal[i];
             idx_extreme = i;
         }
-    return idx_extreme;
+    return (int)idx_extreme;
 }
 
 static int find_min_from_to(const double* signal, unsigned int from, unsigned int to, unsigned int length)
@@ -56,7 +63,8 @@ struct pqrst_positions
 
 void write_binmx_to_file(const char* filename, const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate)
 {
-    FILE* f = fopen(filename, "wb");
+    FILE* f;
+    fopen_s(&f, filename, "wb");
     if (!f)
     {
         perror("fopen");
@@ -91,7 +99,8 @@ void write_binmx_to_file(const char* filename, const double** data, size_t nr_ch
 
 void write_binmx_to_file_1ch(const char* filename, const double* data, size_t nr_samples, double sampling_rate)
 {
-    FILE* f = fopen(filename, "wb");
+    FILE* f;
+    fopen_s(&f, filename, "wb");
     if (!f)
     {
         perror("fopen");
@@ -376,7 +385,7 @@ int xcor_align(const double** leads, size_t nr_samples, size_t ref_ch, size_t ch
     return best_lag;
 }
 
-void accumulate_aligned(double* res, const double* src, size_t nr_src_samples, size_t t_start, size_t t_end, int dt, double w)
+void accumulate_aligned(double* res, const double* src, size_t /**nr_src_samples*/, size_t t_start, size_t t_end, int /**dt*/, double w)
 {
 //    if (t_end > nr_src_samples) t_end = nr_src_samples;
     size_t len = t_end - t_start;
@@ -433,7 +442,7 @@ int create_ideal_signal(double* res, const double** leads, size_t nr_channels, s
     for (int k = 1; k < K; ++k)
     {
         int ch = scores[k].ch;
-        int max_lag_samples = 0.015 * sampling_rate;
+        int max_lag_samples = (int)(0.015 * sampling_rate);
         scores[k].dt = xcor_align(leads, nr_samples, ref_ch, ch, t_start, t_end, max_lag_samples);
     }
 
@@ -460,22 +469,23 @@ static pqrst_positions detect_pqrst_positions(const double** leads, unsigned int
     pos.r_idx = r_idx;
 
     // Q
-    unsigned int window_q = 0.04 * sampling_rate;
+    unsigned int window_q = (unsigned int)(0.04 * sampling_rate);
     unsigned int start_q = (r_idx > window_q) ? (r_idx - window_q) : 0;
     pos.q_idx = find_min_from_to(leads[0], start_q, r_idx, nr_samples);
 
     // S
-    unsigned int window_s = 0.04 * sampling_rate;
+    unsigned int window_s = (unsigned int)(0.04 * sampling_rate);
     unsigned int end_s = std::min(r_idx + window_s, nr_samples - 1);
     pos.s_idx = find_min_from_to(leads[0], r_idx, end_s, nr_samples);
 
     // T
+    //unsigned int t_search_start = 0.15 * sampling_rate;
     unsigned int t_search_start = pos.s_idx;///0.15 * sampling_rate;
-    cout << "XXXXXXXXXXXXXXXXXXXXXXXXXXXXt_search_start " << t_search_start << " pos.s_idx " << pos.s_idx << " sampling_rate " << sampling_rate << endl;
-    unsigned int t_search_end = std::min(r_idx + 0.40 * sampling_rate, (double)(nr_samples - 1));
+    cout << "--------------------------t_search_start " << t_search_start << " pos.s_idx " << pos.s_idx << " sampling_rate " << sampling_rate << endl;
+    unsigned int t_search_end = std::min(r_idx + (unsigned int)(0.40 * sampling_rate), nr_samples - 1);
 
     size_t search_samples = t_search_end - t_search_start; ///(size_t)sampling_rate * 2;
-    double sig_window[search_samples] = {};
+    double* sig_window = new double[search_samples];
     create_ideal_signal(sig_window, leads, nr_ch, nr_samples, sampling_rate, t_search_start, t_search_end, t_search_start, t_search_end);
     write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window1.bin", &leads[0][t_search_start], search_samples, 250);
     write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window2.bin", &leads[1][t_search_start], search_samples, 250);
@@ -495,13 +505,14 @@ static pqrst_positions detect_pqrst_positions(const double** leads, unsigned int
     pos.t_off_idx += t_search_start;
 
     // P
-    unsigned int p_search_start = (r_idx > 0.25 * sampling_rate) ? (r_idx - 0.25 * sampling_rate) : 0;
+    unsigned int p_search_start = (r_idx > (unsigned int)(0.25 * sampling_rate)) ? (r_idx - (unsigned int)(0.25 * sampling_rate)) : 0;
     unsigned int p_search_end = pos.q_idx;
 
     pos.p_idx = find_max_with_baseline_correction(leads[0], p_search_start + 1, p_search_end);
     pos.p_on_idx = find_min_with_baseline_correction(leads[0], p_search_start, pos.p_idx);
     pos.p_off_idx = find_min_with_baseline_correction(leads[0], pos.p_idx, pos.q_idx);
 
+    delete[] sig_window;
     return pos;
 }
 
@@ -509,9 +520,9 @@ static void fill_analysis_result(ecg_analysis_result& result, const double** ecg
 {
     result.pr_interval_ms = (pos.q_idx - pos.p_off_idx) / sampling_rate * 1000.0;
     result.p_wave_duration_ms = (pos.p_off_idx - pos.p_on_idx) / sampling_rate * 1000.0;
-    unsigned int window_isoelectric_search = 0.005 * sampling_rate;
+    unsigned int window_isoelectric_search = (unsigned int)(0.005 * sampling_rate);
     int qrs_start = find_isoelectric_point_before(ecg_signal[1], pos.q_idx - window_isoelectric_search, pos.q_idx);
-    window_isoelectric_search = 0.02 * sampling_rate;
+    window_isoelectric_search = (unsigned int)(0.02 * sampling_rate);
     int qrs_end = find_isoelectric_point_after(ecg_signal[1], pos.s_idx, pos.s_idx + window_isoelectric_search);
     pos.q_idx = qrs_start;
     pos.s_idx = qrs_end;
@@ -522,7 +533,7 @@ static void fill_analysis_result(ecg_analysis_result& result, const double** ecg
     result.qtc_interval_ms = (rr_sec > 0.0) ? result.qt_interval_ms / std::sqrt(rr_sec) : 0.0;
     result.t_wave_duration_ms = (pos.t_off_idx - pos.t_on_idx) / sampling_rate * 1000.0;
 
-    unsigned int st_point = pos.q_idx + 0.06 * sampling_rate;
+    unsigned int st_point = pos.q_idx + (unsigned int)(0.06 * sampling_rate);
     if (st_point >= nr_samples) st_point = nr_samples - 1;
 
     for (unsigned int ch = nr_ch; ch < 12; ++ch)
@@ -538,7 +549,7 @@ static void fill_analysis_result(ecg_analysis_result& result, const double** ecg
         const double* lead = ecg_signal[ch];
         result.r_peak_amplitude_mV[ch] = lead[pos.r_idx];
 
-        unsigned int window_s = 0.04 * sampling_rate;
+        unsigned int window_s = (unsigned int)(0.04 * sampling_rate);
         double s_val_ch = lead[pos.r_idx];
         unsigned int s_loc = pos.r_idx;
         unsigned int end_s = std::min(pos.r_idx + window_s, nr_samples - 1);
@@ -583,7 +594,7 @@ static void fill_annotations(std::vector<pqrst_indxes>& annotations, const pqrst
     });
 }
 
-static void check_sinus_rhythm(const vector<double>& rr_intervals, double rr_mean, double max_rr, double min_rr, double sampling_rate, ecg_analysis_result& result)
+static void check_sinus_rhythm(const vector<double>& rr_intervals, double rr_mean, double max_rr, double min_rr, double /**sampling_rate*/, ecg_analysis_result& result)
 {
     result.premature_beat_count = 0;
     for (double v : rr_intervals)
@@ -600,7 +611,7 @@ static void calculate_rr_statistics(const vector<unsigned int>& peak_indexes, do
         rr_intervals.push_back((peak_indexes[i] - peak_indexes[i - 1]) / sampling_rate * 1000.0);
 
     double total_ms = 0.0, max_rr = 0.0, min_rr = 1e9;
-    for (unsigned int rr_ms : rr_intervals)
+    for (double rr_ms : rr_intervals)
     {
         total_ms += rr_ms;
         if (rr_ms < min_rr) min_rr = rr_ms;

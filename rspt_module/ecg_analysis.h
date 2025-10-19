@@ -29,6 +29,7 @@ struct ecg_analysis_result
     int analysis_status;
     char status_message[64];
     char pathologic_status[64];
+    char reserved[4];
 };
 
 struct pqrst_indxes
