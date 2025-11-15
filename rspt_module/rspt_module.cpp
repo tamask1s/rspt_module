@@ -138,23 +138,9 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
         data_ptrs[ch] = data[ch].data();
     }
 
-    // 2) R-csúcsok detektálása többsávos bemenet alapján
-    std::vector<double> peak_signal(len), filt_signal(len), threshold_signal(len);
-    std::vector<unsigned int> peak_indexes;
-    peak_detector_offline detector(sampling_rate);
-    if (mode == "high_sensitivity")
-        detector.set_mode(peak_detector_offline::Mode::high_sensitivity);
-    else if (mode == "high_ppv")
-        detector.set_mode(peak_detector_offline::Mode::high_ppv);
-    else
-        detector.set_mode(peak_detector_offline::Mode::def);
-
-    detector.detect_multichannel(data_ptrs.data(), nr_channels, (unsigned int)len, peak_signal.data(), filt_signal.data(), threshold_signal.data(), &peak_indexes);
-
     // 3) Analyse eredményének előkészítése
-    ecg_analysis_result result;
     std::vector<pqrst_indxes> annotations;
-    analyse_ecg_multichannel(data_ptrs.data(), (unsigned int)nr_channels, (unsigned int)len, sampling_rate, peak_indexes, annotations, result);
+    ecg_analysis_result result = analyse_ecg_detect_peaks(data_ptrs.data(), nr_channels, len, sampling_rate, annotations, mode);
 
     py::list py_annotations;
     for (const auto& ann : annotations)

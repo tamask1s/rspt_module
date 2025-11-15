@@ -15,6 +15,7 @@ using namespace std;
 #include "ecg_analysis.h"
 #include "filter.h"
 #include "iir_filter_opt.h"
+#include "peak_detector.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -706,4 +707,24 @@ void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, uns
     calculate_rr_statistics(peak_indexes, sampling_rate, result);
     fill_analysis_result(result, ecg_signal, nr_ch, nr_samples_per_ch, sampling_rate, pos);
     fill_annotations(annotations, pos);
+}
+
+ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate, std::vector<pqrst_indxes>& annotations, std::string mode)
+{
+    std::vector<double> peak_signal(nr_samples_per_channel), filt_signal(nr_samples_per_channel), threshold_signal(nr_samples_per_channel);
+    std::vector<unsigned int> peak_indexes;
+    peak_detector_offline detector(sampling_rate);
+    if (mode == "high_sensitivity")
+        detector.set_mode(peak_detector_offline::Mode::high_sensitivity);
+    else if (mode == "high_ppv")
+        detector.set_mode(peak_detector_offline::Mode::high_ppv);
+    else
+        detector.set_mode(peak_detector_offline::Mode::def);
+
+    detector.detect_multichannel(data, nr_channels,nr_samples_per_channel, peak_signal.data(), filt_signal.data(), threshold_signal.data(), &peak_indexes);
+
+    ecg_analysis_result result;
+    analyse_ecg_multichannel(data, (unsigned int)nr_channels, nr_samples_per_channel, sampling_rate, peak_indexes, annotations, result);
+
+    return result;
 }
