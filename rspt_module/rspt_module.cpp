@@ -140,7 +140,7 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
 
     // 3) Analyse eredményének előkészítése
     std::vector<pqrst_indxes> annotations;
-    ecg_analysis_result result = analyse_ecg_detect_peaks(data_ptrs.data(), nr_channels, len, sampling_rate, annotations, mode);
+    ecg_analysis_result result = analyse_ecg_detect_peaks(data_ptrs.data(), nr_channels, len, sampling_rate, annotations, 0, mode);
 
     py::list py_annotations;
     for (const auto& ann : annotations)

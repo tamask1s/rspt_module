@@ -41,10 +41,10 @@ static int find_extreme_from_to(const double* signal, unsigned int from, unsigne
     return (int)idx_extreme;
 }
 
-static int find_min_from_to(const double* signal, unsigned int from, unsigned int to, unsigned int length)
-{
-    return find_extreme_from_to(signal, from, to, length, std::less<double>());
-}
+//static int find_min_from_to(const double* signal, unsigned int from, unsigned int to, unsigned int length)
+//{
+//    return find_extreme_from_to(signal, from, to, length, std::less<double>());
+//}
 
 static int find_max_from_to(const double* signal, unsigned int from, unsigned int to, unsigned int length)
 {
@@ -464,6 +464,411 @@ int create_ideal_signal(double* res, double** leads, size_t nr_channels, size_t 
     return 0;
 }
 
+static inline size_t clamp_index(long idx, size_t len)
+{
+    if (idx < 0) return 0;
+    if ((size_t)idx >= len) return len - 1;
+    return (size_t)idx;
+}
+
+void detect_qrs(double* ecg, size_t len, double fs, size_t orig_r_indx, size_t& q_indx, size_t& r_indx, size_t& s_indx)
+{
+    // default outputs (safe)
+    q_indx = r_indx = s_indx = orig_r_indx;
+
+    if (!ecg || len == 0) return;
+
+    // convert orig index safely
+    size_t orig = std::min(orig_r_indx, len - 1);
+
+    // milliseconds -> samples helpers
+    auto ms2samps = [&](double ms)->int
+    {
+        return (int)std::max(1.0, std::round(ms * fs / 1000.0));
+    };
+
+    // window sizes (tuned for clinical ECG; can be adjusted)
+    int baseline_ms = 300;    // baseline median over ±300 ms
+    int local_win_ms = 150;   // search ±150 ms for peaks
+    int q_search_ms = 80;     // search up to 80 ms for Q / S
+    int min_peak_sep_ms = 20; // minimal separation accepted between biphasic peaks
+
+    int baseline_w = ms2samps(baseline_ms);
+    int win = ms2samps(local_win_ms);
+    int qwin = ms2samps(q_search_ms);
+    int min_peak_sep = ms2samps(min_peak_sep_ms);
+
+    // baseline median computation in [orig - baseline_w, orig + baseline_w]
+    int bL = (int)orig - baseline_w;
+    int bR = (int)orig + baseline_w;
+    bL = std::max(bL, 0);
+    bR = std::min(bR, (int)len - 1);
+
+    std::vector<double> tmp;
+    tmp.reserve(bR - bL + 1);
+    for (int i = bL; i <= bR; ++i) tmp.push_back(ecg[i]);
+    // compute median
+    std::nth_element(tmp.begin(), tmp.begin() + tmp.size()/2, tmp.end());
+    double baseline = tmp[tmp.size()/2];
+    if (tmp.size() >= 2)
+    {
+        // for even size, this is an approximation but fine
+    }
+
+    // create a baseline-corrected view via accessor lambda (avoid copying whole signal)
+    auto val = [&](int idx)->double
+    {
+        idx = std::max(0, std::min((int)len - 1, idx));
+        return ecg[idx] - baseline;
+    };
+
+    // search interval for peaks
+    int L = std::max(0, (int)orig - win);
+    int R = std::min((int)len - 1, (int)orig + win);
+
+    // find local extrema in [L,R]
+    struct Peak
+    {
+        int idx;
+        double v;
+        bool is_max;
+    };
+    std::vector<Peak> peaks;
+    // detect local maxima/minima by simple slope sign changes
+    for (int i = std::max(L+1,1); i <= std::min(R-1,(int)len-2); ++i)
+    {
+        double p = val(i-1);
+        double c = val(i);
+        double n = val(i+1);
+        if (c >= p && c >= n)
+        {
+            peaks.push_back({i, c, true});
+        }
+        else if (c <= p && c <= n)
+        {
+            peaks.push_back({i, c, false});
+        }
+    }
+
+    // If no peaks found inside window (rare), fall back to taking orig as R and search Q/S there.
+    if (peaks.empty())
+    {
+        r_indx = orig;
+        // find Q: local minimum in [orig - qwin, orig]
+        int qL = std::max(0, (int)orig - qwin);
+        int qR = (int)orig;
+        int qmin = qL;
+        for (int i = qL; i <= qR; ++i) if (val(i) < val(qmin)) qmin = i;
+        q_indx = clamp_index(qmin, len);
+        // find S: local minimum in [orig, orig + qwin]
+        int sL = (int)orig;
+        int sR = std::min((int)len - 1, (int)orig + qwin);
+        int smin = sR;
+        for (int i = sL; i <= sR; ++i) if (val(i) < val(smin)) smin = i;
+        s_indx = clamp_index(smin, len);
+        // ensure ordering
+        if (!(q_indx < r_indx && r_indx < s_indx))
+        {
+            if (q_indx >= r_indx) q_indx = (r_indx > 0) ? r_indx - 1 : r_indx;
+            if (s_indx <= r_indx) s_indx = std::min((size_t)r_indx + 1, len - 1);
+        }
+        return;
+    }
+
+    // find the peak nearest to orig (most relevant) and also the maximum abs peak in window
+    int nearest_peak_idx = 0;
+    int maxabs_peak_idx = 0;
+    double best_dist = std::numeric_limits<double>::infinity();
+    double maxabs = 0.0;
+    for (size_t i = 0; i < peaks.size(); ++i)
+    {
+        double d = std::abs(peaks[i].idx - (int)orig);
+        if (d < best_dist)
+        {
+            best_dist = d;
+            nearest_peak_idx = (int)i;
+        }
+        double a = std::abs(peaks[i].v);
+        if (a > maxabs)
+        {
+            maxabs = a;
+            maxabs_peak_idx = (int)i;
+        }
+    }
+
+    // choose candidate peaks for biphasic detection: look for two opposite-sign peaks within [L,R]
+    // pick the two largest-abs peaks (if they have opposite signs and are reasonably close) => biphasic
+    // build vector of peaks sorted by abs desc
+    std::vector<int> idxs(peaks.size());
+    for (size_t i = 0; i < peaks.size(); ++i) idxs[i] = (int)i;
+    std::sort(idxs.begin(), idxs.end(), [&](int a, int b)
+    {
+        return std::abs(peaks[a].v) > std::abs(peaks[b].v);
+    });
+
+    bool is_biphasic = false;
+    int left_peak = -1, right_peak = -1;
+    if (idxs.size() >= 2)
+    {
+        // examine top few peaks (up to 4) to find a pair with opposite signs
+        size_t topN = std::min((size_t)4, idxs.size());
+        for (size_t i = 0; i < topN && !is_biphasic; ++i)
+        {
+            for (size_t j = i + 1; j < topN && !is_biphasic; ++j)
+            {
+                int ia = idxs[i], ib = idxs[j];
+                if (peaks[ia].v * peaks[ib].v < 0.0)   // opposite signs
+                {
+                    int ia_idx = peaks[ia].idx;
+                    int ib_idx = peaks[ib].idx;
+                    int sep = std::abs(ia_idx - ib_idx);
+                    // require that separation is at least some minimum (not identical samples)
+                    if (sep >= min_peak_sep && sep <=  (int)(2*win))
+                    {
+                        // require both peaks are reasonably large (relative to maxabs in this window)
+                        double a1 = std::abs(peaks[ia].v);
+                        double a2 = std::abs(peaks[ib].v);
+                        // thresholds: both >= 0.35*maxabs and max ratio not too extreme
+                        double thr = 0.35;
+                        double ratio = (std::max(a1,a2) / std::max(1e-12, std::min(a1,a2)));
+                        if (a1 >= thr*maxabs && a2 >= thr*maxabs && ratio < 6.0)
+                        {
+                            // order them left->right
+                            if (ia_idx < ib_idx)
+                            {
+                                left_peak = ia_idx;
+                                right_peak = ib_idx;
+                            }
+                            else
+                            {
+                                left_peak = ib_idx;
+                                right_peak = ia_idx;
+                            }
+                            is_biphasic = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (is_biphasic)
+    {
+        // center R between left_peak and right_peak (midpoint)
+        int center = (left_peak + right_peak) / 2;
+        r_indx = clamp_index(center, len);
+
+        // find Q: search left from left_peak for baseline crossing (val ~ 0) or local minimum near start
+        int q_search_L = std::max(0, left_peak - qwin*2); // allow a larger search just before biphasic start
+        int q_search_R = left_peak;
+        int q_found = -1;
+        // prefer zero-crossing: find last index k in [q_search_L+1, q_search_R] s.t. val(k-1)*val(k) <= 0
+        for (int k = q_search_R; k > q_search_L; --k)
+        {
+            if (val(k) == 0.0 || val(k-1) * val(k) <= 0.0)
+            {
+                q_found = k;
+                break;
+            }
+        }
+        if (q_found < 0)
+        {
+            // fallback: pick the local extremum (min abs value) near q_search_L..q_search_R
+            int best = q_search_L;
+            double bestAbs = std::abs(val(best));
+            for (int k = q_search_L+1; k <= q_search_R; ++k)
+            {
+                double a = std::abs(val(k));
+                if (a < bestAbs)
+                {
+                    bestAbs = a;
+                    best = k;
+                }
+            }
+            q_found = best;
+        }
+        q_indx = clamp_index(q_found, len);
+
+        // find S: search right from right_peak for baseline crossing or low abs value
+        int s_search_L = right_peak;
+        int s_search_R = std::min((int)len - 1, right_peak + qwin*2);
+        int s_found = -1;
+        for (int k = s_search_L; k < s_search_R; ++k)
+        {
+            if (val(k) == 0.0 || val(k) * val(k+1) <= 0.0)
+            {
+                s_found = k;
+                break;
+            }
+        }
+        if (s_found < 0)
+        {
+            int best = s_search_L;
+            double bestAbs = std::abs(val(best));
+            for (int k = s_search_L+1; k <= s_search_R; ++k)
+            {
+                double a = std::abs(val(k));
+                if (a < bestAbs)
+                {
+                    bestAbs = a;
+                    best = k;
+                }
+            }
+            s_found = best;
+        }
+        s_indx = clamp_index(s_found, len);
+
+        // ensure ordering Q < R < S, if not fix by nudging within bounds
+        if (!(q_indx < r_indx && r_indx < s_indx))
+        {
+            if (q_indx >= r_indx) q_indx = (r_indx > 0) ? r_indx - 1 : r_indx;
+            if (s_indx <= r_indx) s_indx = std::min((size_t)r_indx + 1, len - 1);
+        }
+
+        return;
+    }
+
+    // Not biphasic: pick dominant peak near orig (prefer nearest or the maxabs)
+    int chosen_peak_idx = peaks[nearest_peak_idx].idx;
+    // if the nearest peak has small amplitude relative to maxabs, choose the maxabs peak (stability)
+    if (std::abs(peaks[nearest_peak_idx].v) < 0.25 * maxabs)
+    {
+        chosen_peak_idx = peaks[maxabs_peak_idx].idx;
+    }
+    r_indx = clamp_index(chosen_peak_idx, len);
+
+    // Determine if R is positive-going or negative-going
+    double rval = val((int)r_indx);
+    bool r_positive = (rval >= 0.0);
+
+    // Q search: search left for a local minimum (for positive R) or local maximum (for negative R),
+    // or baseline crossing
+    int qL = std::max(0, (int)r_indx - qwin);
+    int qR = (int)r_indx;
+    int qbest = qR;
+    if (r_positive)
+    {
+        // we want preceding minimum (Q)
+        double bestv = val(qL);
+        qbest = qL;
+        for (int k = qL; k <= qR; ++k)
+        {
+            double v = val(k);
+            if (v < bestv)
+            {
+                bestv = v;
+                qbest = k;
+            }
+        }
+        // if there's a zero crossing nearer to r_indx, pick that (iso-electrical start)
+        for (int k = qR; k > qL; --k)
+        {
+            if (val(k) == 0.0 || val(k-1)*val(k) <= 0.0)
+            {
+                qbest = k;
+                break;
+            }
+        }
+    }
+    else
+    {
+        // negative R -> preceding maximum (Q) (since Q may be small positive)
+        double bestv = val(qL);
+        qbest = qL;
+        for (int k = qL; k <= qR; ++k)
+        {
+            double v = val(k);
+            if (v > bestv)
+            {
+                bestv = v;
+                qbest = k;
+            }
+        }
+        for (int k = qR; k > qL; --k)
+        {
+            if (val(k) == 0.0 || val(k-1)*val(k) <= 0.0)
+            {
+                qbest = k;
+                break;
+            }
+        }
+    }
+    q_indx = clamp_index(qbest, len);
+
+    // S search: symmetrical to the right
+    int sL = (int)r_indx;
+    int sR = std::min((int)len - 1, (int)r_indx + qwin);
+    int sbest = sL;
+    if (r_positive)
+    {
+        // after positive R expect S to be a negative deflection -> local minimum
+        double bestv = val(sL);
+        sbest = sL;
+        for (int k = sL; k <= sR; ++k)
+        {
+            double v = val(k);
+            if (v < bestv)
+            {
+                bestv = v;
+                sbest = k;
+            }
+        }
+        for (int k = sL; k < sR; ++k)
+        {
+            if (val(k) == 0.0 || val(k)*val(k+1) <= 0.0)
+            {
+                sbest = k;
+                break;
+            }
+        }
+    }
+    else
+    {
+        // after negative R expect a positive rebound -> local maximum
+        double bestv = val(sL);
+        sbest = sL;
+        for (int k = sL; k <= sR; ++k)
+        {
+            double v = val(k);
+            if (v > bestv)
+            {
+                bestv = v;
+                sbest = k;
+            }
+        }
+        for (int k = sL; k < sR; ++k)
+        {
+            if (val(k) == 0.0 || val(k)*val(k+1) <= 0.0)
+            {
+                sbest = k;
+                break;
+            }
+        }
+    }
+    s_indx = clamp_index(sbest, len);
+
+    // Guarantee ordering Q < R < S; if violated, try minor corrections
+    if (!(q_indx < r_indx && r_indx < s_indx))
+    {
+        // try to enforce simple order by nudging
+        if (q_indx >= r_indx)
+        {
+            if (r_indx > 0) q_indx = r_indx - 1;
+            else q_indx = r_indx;
+        }
+        if (s_indx <= r_indx)
+        {
+            if (r_indx + 1 < len) s_indx = r_indx + 1;
+            else s_indx = r_indx;
+        }
+    }
+
+    // final safety clamp
+    q_indx = std::min(q_indx, len - 1);
+    r_indx = std::min(r_indx, len - 1);
+    s_indx = std::min(s_indx, len - 1);
+}
+
 static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch, unsigned int r_idx, double sampling_rate, unsigned int nr_samples)
 {
     write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window1.bin", &leads[0][0], nr_samples, sampling_rate);
@@ -485,14 +890,21 @@ static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch
     pos.r_idx = r_idx;
 
     // Q
-    unsigned int window_q = (unsigned int)(0.04 * sampling_rate);
+    unsigned int window_q = (unsigned int)(0.4 * sampling_rate);
     unsigned int start_q = (r_idx > window_q) ? (r_idx - window_q) : 0;
-    pos.q_idx = find_min_from_to(leads[0], start_q, r_idx, nr_samples);
 
-    // S
-    unsigned int window_s = (unsigned int)(0.04 * sampling_rate);
-    unsigned int end_s = std::min(r_idx + window_s, nr_samples - 1);
-    pos.s_idx = find_min_from_to(leads[0], r_idx, end_s, nr_samples);
+    size_t q_indx, r_indx, s_indx;
+    detect_qrs(&leads[0][start_q], 0.8 * sampling_rate, sampling_rate, r_idx - start_q, q_indx, r_indx, s_indx);
+    pos.q_idx = q_indx + start_q;
+    pos.r_idx = r_indx + start_q;
+    pos.s_idx = s_indx + start_q;
+
+//    pos.q_idx = find_min_from_to(leads[0], start_q, r_idx, nr_samples);
+//
+//    // S
+//    unsigned int window_s = (unsigned int)(0.04 * sampling_rate);
+//    unsigned int end_s = std::min(r_idx + window_s, nr_samples - 1);
+//    pos.s_idx = find_min_from_to(leads[0], r_idx, end_s, nr_samples);
 
     // T
     //unsigned int t_search_start = 0.15 * sampling_rate;
@@ -709,10 +1121,15 @@ void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, uns
     fill_annotations(annotations, pos);
 }
 
-ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate, std::vector<pqrst_indxes>& annotations, std::string mode)
+ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate, std::vector<pqrst_indxes>& annotations, std::vector<unsigned int>* peak_indexes, std::string mode)
 {
     std::vector<double> peak_signal(nr_samples_per_channel), filt_signal(nr_samples_per_channel), threshold_signal(nr_samples_per_channel);
-    std::vector<unsigned int> peak_indexes;
+    bool local_peak_indexes_used = false;
+    if (!peak_indexes)
+    {
+        peak_indexes = new std::vector<unsigned int>;
+        local_peak_indexes_used = true;
+    }
     peak_detector_offline detector(sampling_rate);
     if (mode == "high_sensitivity")
         detector.set_mode(peak_detector_offline::Mode::high_sensitivity);
@@ -721,10 +1138,13 @@ ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_chan
     else
         detector.set_mode(peak_detector_offline::Mode::def);
 
-    detector.detect_multichannel(data, nr_channels,nr_samples_per_channel, peak_signal.data(), filt_signal.data(), threshold_signal.data(), &peak_indexes);
+    //detector.detect_multichannel(data, nr_channels, nr_samples_per_channel, peak_signal.data(), filt_signal.data(), threshold_signal.data(), peak_indexes);
+    detector.detect(data[0], nr_samples_per_channel, peak_signal.data(), filt_signal.data(), threshold_signal.data(), peak_indexes);
 
     ecg_analysis_result result;
-    analyse_ecg_multichannel(data, (unsigned int)nr_channels, nr_samples_per_channel, sampling_rate, peak_indexes, annotations, result);
+    analyse_ecg_multichannel(data, (unsigned int)nr_channels, nr_samples_per_channel, sampling_rate, *peak_indexes, annotations, result);
 
+    if (local_peak_indexes_used)
+        delete peak_indexes;
     return result;
 }
