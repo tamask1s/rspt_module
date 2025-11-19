@@ -510,10 +510,10 @@ void detect_qrs(double* ecg, size_t len, double fs, size_t orig_r_indx, size_t& 
     // compute median
     std::nth_element(tmp.begin(), tmp.begin() + tmp.size()/2, tmp.end());
     double baseline = tmp[tmp.size()/2];
-    if (tmp.size() >= 2)
-    {
-        // for even size, this is an approximation but fine
-    }
+//    if (tmp.size() >= 2)
+//    {
+//        // for even size, this is an approximation but fine
+//    }
 
     // create a baseline-corrected view via accessor lambda (avoid copying whole signal)
     auto val = [&](int idx)->double
@@ -869,6 +869,195 @@ void detect_qrs(double* ecg, size_t len, double fs, size_t orig_r_indx, size_t& 
     s_indx = std::min(s_indx, len - 1);
 }
 
+/*
+     1) P ablak = Q-tól vissza 120–200 ms
+     2) baseline = medián a teljes P ablakban
+     3) durva P csúcs lokalizálása (max abs jel)
+     4) P-csúcson finom extrémum keresés (lokális max/min)
+     5) onset/offset = baseline-közeli metszések + derivált küszöb
+*/
+
+static inline size_t clamp_idx(long i, size_t len)
+{
+    if (i < 0) return 0;
+    if ((size_t)i >= len) return len - 1;
+    return (size_t)i;
+}
+
+int detect_p(double* ecg, size_t len, double fs, size_t q_indx, size_t& p_on_indx, size_t& p_indx, size_t& p_off_indx)
+{
+    p_on_indx = p_indx = p_off_indx = q_indx;
+
+    if (!ecg || len < 10) return 1;
+
+    // Helper for ms->samples
+    auto ms2s = [&](double ms)->int
+    {
+        return std::max(1, (int)std::floor(ms * fs / 1000.0));
+    };
+
+    // Clinical P window
+    int Pwin_min = ms2s(80);     // minimal: 80 ms Q előtt
+    int Pwin_max = ms2s(220);    // maximális: 220 ms Q előtt
+    // Hard limit: typical P width ~80–120 ms
+
+    int R = (int)q_indx;
+    int L = R - Pwin_max;
+    int M = R - Pwin_min;
+
+    if (M < 0) M = 0;
+    if (L < 0) L = 0;
+    if (R >= (int)len) R = (int)len - 1;
+
+    if (L >= R) return 2;
+
+    // Compute baseline (median) in the P window
+    std::vector<double> buf;
+    buf.reserve(R - L + 1);
+    for (int i = L; i <= R; ++i) buf.push_back(ecg[i]);
+
+    std::nth_element(buf.begin(), buf.begin() + buf.size()/2, buf.end());
+    double baseline = buf[buf.size()/2];
+
+    // baseline corrected accessor
+    auto val = [&](int i)->double
+    {
+        i = std::max(0, std::min((int)len - 1, i));
+        return ecg[i] - baseline;
+    };
+
+    // ---- 1) Durva P csúcs keresés: legnagyobb abs jel az ablakban ----
+    int rough_peak = L;
+    double bestAbs = 0.0;
+    for (int i = L; i <= M; ++i)
+    {
+        double a = std::abs(val(i));
+        if (a > bestAbs)
+        {
+            bestAbs = a;
+            rough_peak = i;
+        }
+    }
+
+    // ---- 2) Finom P csúcs: lokális maximum/minimum keresés körül ----
+    int search_w = ms2s(20);  // ±20 ms körüli finom keresés
+    int fpL = std::max(L, rough_peak - search_w);
+    int fpR = std::min(M, rough_peak + search_w);
+
+    int fine_peak = rough_peak;
+    double best_ext = std::abs(val(rough_peak));
+
+    // keresd a legjobb lokális extrémumot
+    for (int i = fpL + 1; i <= fpR - 1; ++i)
+    {
+        double p = val(i);
+        if ((p >= val(i-1) && p >= val(i+1)) ||
+                (p <= val(i-1) && p <= val(i+1)))
+        {
+            double a = std::abs(p);
+            if (a > best_ext)
+            {
+                best_ext = a;
+                fine_peak = i;
+            }
+        }
+    }
+
+    p_indx = clamp_idx(fine_peak, len);
+
+    // Determine polarity (positive or negative P)
+    bool p_positive = (val((int)p_indx) >= 0.0);
+
+    // ---- 3) Onset detection: keresd baseline-közeli pontot balra ----
+    int onL = L;
+    int onR = (int)p_indx;
+
+    double amp = std::abs(val((int)p_indx));
+    double on_thr = amp * 0.08;       // 8% amplitude threshold
+    double der_thr = amp * 0.015;     // derivative threshold ~1.5%/sample
+
+    int onset = onL;
+    bool found_on = false;
+
+    for (int i = onR; i > onL + 2; --i)
+    {
+        double dv = std::abs(val(i) - val(i-1));
+        if (std::abs(val(i)) < on_thr && dv < der_thr)
+        {
+            onset = i;
+            found_on = true;
+            break;
+        }
+    }
+
+    if (!found_on)
+    {
+        // fallback: minimum abs value
+        int best = onL;
+        double bestA = std::abs(val(best));
+        for (int i = onL + 1; i <= onR; ++i)
+        {
+            if (std::abs(val(i)) < bestA)
+            {
+                bestA = std::abs(val(i));
+                best = i;
+            }
+        }
+        onset = best;
+    }
+
+    p_on_indx = clamp_idx(onset, len);
+
+    // ---- 4) Offset detection: baseline/derivative jobb oldalon ----
+    int offL = (int)p_indx;
+    int offR = M;
+
+    double off_thr = amp * 0.08;      // 8% amplitude
+    double der_thr2 = amp * 0.015;
+
+    int offset = offR;
+    bool found_off = false;
+
+    for (int i = offL + 1; i < offR; ++i)
+    {
+        double dv = std::abs(val(i) - val(i-1));
+        if (std::abs(val(i)) < off_thr && dv < der_thr2)
+        {
+            offset = i;
+            found_off = true;
+            break;
+        }
+    }
+
+    if (!found_off)
+    {
+        // fallback: minimum abs region
+        int best = offL;
+        double bestA = std::abs(val(best));
+        for (int i = offL + 1; i <= offR; ++i)
+        {
+            double a = std::abs(val(i));
+            if (a < bestA)
+            {
+                bestA = a;
+                best = i;
+            }
+        }
+        offset = best;
+    }
+
+    p_off_indx = clamp_idx(offset, len);
+
+    // ---- 6) Biztonság: p_on < p < p_off ----
+    if (!(p_on_indx < p_indx && p_indx < p_off_indx))
+    {
+        p_on_indx = (p_indx > 1 ? p_indx - 1 : p_indx);
+        p_off_indx = std::min(p_indx + 1, len - 1);
+    }
+
+    return 0;
+}
+
 static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch, unsigned int r_idx, double sampling_rate, unsigned int nr_samples)
 {
     write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window1.bin", &leads[0][0], nr_samples, sampling_rate);
@@ -938,10 +1127,11 @@ static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch
     // P
     delete[] sig_window;
     unsigned int p_search_start = (r_idx > (unsigned int)(0.3 * sampling_rate)) ? (r_idx - (unsigned int)(0.3 * sampling_rate)) : 0;
-    unsigned int p_search_end = pos.q_idx - 0.02 * sampling_rate;
+    unsigned int p_search_end = pos.q_idx + 0.01 * sampling_rate;
     search_samples = p_search_end - p_search_start; ///(size_t)sampling_rate * 2;
     sig_window = new double[search_samples];
-    create_ideal_signal(sig_window, leads, nr_ch, nr_samples, sampling_rate, p_search_start, p_search_end, p_search_start, p_search_end);
+
+
     if (false)
     {
         //memcpy(sig_window, &leads[1][p_search_start], search_samples * 8);
@@ -955,16 +1145,31 @@ static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch
         write_binmx_to_file("/media/sf_SharedFolder/sig_window.bin", sig_window_, 3, p_search_end - p_search_start, 250);
     }
 
-    pos.p_idx = find_max_from_to(sig_window, 1, search_samples, search_samples);
-    pos.p_on_idx = find_min_with_baseline_correction(sig_window, 0, pos.p_idx);
-    unsigned int p_offset_end = std::min(pos.p_idx + (int)(0.20 * sampling_rate), (int)search_samples - 1);
-    pos.p_off_idx = find_min_with_baseline_correction(sig_window, pos.p_idx, p_offset_end);
-    //pos.p_idx = (pos.p_idx + pos.p_off_idx) / 2;
-    //pos.p_idx = find_max_from_to(sig_window, 1, search_samples, search_samples);
+    if (true)
+    {
+        p_search_end -= 0.03 * sampling_rate;
+        search_samples = p_search_end - p_search_start;
+        create_ideal_signal(sig_window, leads, nr_ch, nr_samples, sampling_rate, p_search_start, p_search_end, p_search_start, p_search_end);
+        pos.p_idx = find_max_from_to(sig_window, 1, search_samples, search_samples);
+        pos.p_on_idx = find_min_with_baseline_correction(sig_window, 0, pos.p_idx);
+        unsigned int p_offset_end = std::min(pos.p_idx + (int)(0.20 * sampling_rate), (int)search_samples - 1);
+        pos.p_off_idx = find_min_with_baseline_correction(sig_window, pos.p_idx, p_offset_end);
+        //pos.p_idx = (pos.p_idx + pos.p_off_idx) / 2;
+        //pos.p_idx = find_max_from_to(sig_window, 1, search_samples, search_samples);
+    }
+    else
+    {
+        create_ideal_signal(sig_window, leads, nr_ch, nr_samples, sampling_rate, p_search_start, p_search_end, p_search_start, p_search_end);
+        size_t p_on_indx, p_off_indx, p_indx;
+        /*int res = */detect_p(sig_window, search_samples, sampling_rate, pos.q_idx - p_search_start, p_on_indx, p_indx, p_off_indx);
+        pos.p_on_idx = p_on_indx;
+        pos.p_idx = p_indx;
+        pos.p_off_idx = p_off_indx;
+    }
+
     pos.p_idx += p_search_start;
     pos.p_on_idx += p_search_start;
     pos.p_off_idx += p_search_start;
-
 
     //pos.p_idx = find_max_with_baseline_correction(leads[1], p_search_start + 1, p_search_end);
     /*
