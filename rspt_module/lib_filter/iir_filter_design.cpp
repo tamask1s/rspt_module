@@ -22,11 +22,11 @@
 
 using namespace std;
 
-#include "../filter.h"
-
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+#include "../filter.h"
 
 bool create_filter_iir_butterworth(vector<double>& n, vector<double>& d, filter_type type, int order, double sampling_rate, double cutoff_low)
 {

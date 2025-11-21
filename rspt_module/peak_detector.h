@@ -591,7 +591,7 @@ public:
     {
         detect_multich(ecg_signal_multich, nr_channels, len, peak_signal, filt_signal, threshold_signal, peak_indexes, r_reference_value, previous_peak_reference_ratio);
         return;
-        double sign_array[nr_channels];
+        vector<double> sign_array(nr_channels);
         for (unsigned int i = 0; i < nr_channels; ++i)
             sign_array[i] = 1;
         for (unsigned int i = 0; i < nr_channels; ++i)

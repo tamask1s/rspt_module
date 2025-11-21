@@ -12,14 +12,14 @@
 
 using namespace std;
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #include "ecg_analysis.h"
 #include "filter.h"
 #include "iir_filter_opt.h"
 #include "peak_detector.h"
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 
 template <typename Compare>
 static int find_extreme_from_to(const double* signal, unsigned int from, unsigned int to, unsigned int length, Compare comp)
@@ -966,7 +966,7 @@ int detect_p(double* ecg, size_t len, double fs, size_t q_indx, size_t& p_on_ind
     p_indx = clamp_idx(fine_peak, len);
 
     // Determine polarity (positive or negative P)
-    bool p_positive = (val((int)p_indx) >= 0.0);
+    // bool p_positive = (val((int)p_indx) >= 0.0);
 
     // ---- 3) Onset detection: keresd baseline-közeli pontot balra ----
     int onL = L;
@@ -987,15 +987,6 @@ int detect_p(double* ecg, size_t len, double fs, size_t q_indx, size_t& p_on_ind
             onset = i;
             found_on = true;
             break;
-
-
-
-
-
-
-
-
-
         }
     }
 
@@ -1035,15 +1026,6 @@ int detect_p(double* ecg, size_t len, double fs, size_t q_indx, size_t& p_on_ind
             offset = i;
             found_off = true;
             break;
-
-
-
-
-
-
-
-
-
         }
     }
 
