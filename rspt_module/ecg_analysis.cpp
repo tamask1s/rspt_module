@@ -968,7 +968,7 @@ int detect_p(double* ecg, size_t len, double fs, size_t q_indx, size_t& p_on_ind
     // Determine polarity (positive or negative P)
     bool p_positive = (val((int)p_indx) >= 0.0);
 
-    // ---- 3) Onset detection: polarity-aware search ----
+    // ---- 3) Onset detection: keresd baseline-közeli pontot balra ----
     int onL = L;
     int onR = (int)p_indx;
 
@@ -979,23 +979,23 @@ int detect_p(double* ecg, size_t len, double fs, size_t q_indx, size_t& p_on_ind
     int onset = onL;
     bool found_on = false;
 
-    for (int i = onR; i > onL + 2; --i) {
-        double dv = val(i) - val(i-1);
+    for (int i = onR; i > onL + 2; --i)
+    {
+        double dv = std::abs(val(i) - val(i-1));
+        if (std::abs(val(i)) < on_thr && dv < der_thr)
+        {
+            onset = i;
+            found_on = true;
+            break;
 
-        if (p_positive) {
-            // Pozitív P-hullám: onset ott, ahol az amplitúdó kicsi ÉS a jel elkezd emelkedni
-            if (std::abs(val(i)) < on_thr && dv > -der_thr) {
-                onset = i;
-                found_on = true;
-                break;
-            }
-        } else {
-            // Negatív P-hullám: onset ott, ahol amplitúdó kicsi és a jel elkezd csökkenni
-            if (std::abs(val(i)) < on_thr && dv < der_thr) {
-                onset = i;
-                found_on = true;
-                break;
-            }
+
+
+
+
+
+
+
+
         }
     }
 
@@ -1017,7 +1017,7 @@ int detect_p(double* ecg, size_t len, double fs, size_t q_indx, size_t& p_on_ind
 
     p_on_indx = clamp_idx(onset, len);
 
-    // ---- 4) Offset detection: polarity-aware ----
+    // ---- 4) Offset detection: baseline/derivative jobb oldalon ----
     int offL = (int)p_indx;
     int offR = M;
 
@@ -1027,23 +1027,23 @@ int detect_p(double* ecg, size_t len, double fs, size_t q_indx, size_t& p_on_ind
     int offset = offR;
     bool found_off = false;
 
-    for (int i = offL + 1; i < offR; ++i) {
-        double dv = val(i) - val(i-1);
+    for (int i = offL + 1; i < offR; ++i)
+    {
+        double dv = std::abs(val(i) - val(i-1));
+        if (std::abs(val(i)) < off_thr && dv < der_thr2)
+        {
+            offset = i;
+            found_off = true;
+            break;
 
-        if (p_positive) {
-            // Pozitív P: offset akkor, amikor a jel baseline-hoz visszaér és nem emelkedik tovább
-            if (std::abs(val(i)) < off_thr && dv < der_thr2) {
-                offset = i;
-                found_off = true;
-                break;
-            }
-        } else {
-            // Negatív P: offset akkor, amikor baseline közelébe kerül és nem süllyed tovább
-            if (std::abs(val(i)) < off_thr && dv > -der_thr2) {
-                offset = i;
-                found_off = true;
-                break;
-            }
+
+
+
+
+
+
+
+
         }
     }
 
