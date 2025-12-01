@@ -5,7 +5,7 @@ import rspt_module
 
 RECORD_PATH = '/media/sf_SharedFolder/QT/qt-database-1.0.0/sel301'
 RECORD_PATH = '/media/sf_SharedFolder/QT/qt-database-1.0.0/sel306'
-DISPLAY_LEAD_IDX = 1
+DISPLAY_LEAD_IDX = 0
 
 def load_qtdb_record(record_path):
     record = wfdb.rdrecord(record_path)
@@ -117,14 +117,26 @@ def compute_rspt_like_stats(signal, ann_by_type, fs):
 
     # utolsó előtti komplexus
     i = -2
-    p_on, p_peak, p_off = ann_by_type['p'][i]
     r_on, r_peak, r_off = ann_by_type['N'][i]
-    t_on, t_peak, t_off = ann_by_type['t'][i]
+    
+    # Keressük a QRS előtti P hullámot
+    p_on, p_peak, p_off = None, None, None
+    for p_on_tmp, p_peak_tmp, p_off_tmp in ann_by_type['p']:
+        if p_off_tmp < r_on:
+            p_on, p_peak, p_off = p_on_tmp, p_peak_tmp, p_off_tmp
+    
+    # Keressük a QRS utáni T hullámot
+    t_on, t_peak, t_off = None, None, None
+    for t_on_tmp, t_peak_tmp, t_off_tmp in ann_by_type['t']:
+        if t_on_tmp > r_off:
+            t_on, t_peak, t_off = t_on_tmp, t_peak_tmp, t_off_tmp
+            break
 
     rr_interval = (ann_by_type['N'][i+1][1] - r_peak) * 1000 / fs
     rr_variation = abs((ann_by_type['N'][i+1][1] - ann_by_type['N'][i-1][1]) * 1000 / 2 / fs)
     hr = 60000 / rr_interval
-    pr_interval = (r_on - p_off) * 1000 / fs
+    pr_interval = (r_on - p_on) * 1000 / fs
+    #print('---- r_on: ', r_on / fs,  ' p_on: ', p_on / fs)
     qrs_duration = (r_off - r_on) * 1000 / fs
     qt_interval = (t_off - r_on) * 1000 / fs
     qtc = qt_interval / np.sqrt(rr_interval / 1000)
@@ -159,7 +171,6 @@ def compute_rspt_like_stats(signal, ann_by_type, fs):
     return result
 
 def print_result(result):
-    print("\n--- QTDB alapú eredmények (utolsó előtti komplexus) ---")
     for k, v in result.items():
         if k != "status_message":
             print(f"{k}: {v}")
@@ -170,6 +181,7 @@ if __name__ == "__main__":
     triplets = extract_structured_annotations(ann)
     ann_by_type = organize_annotations_by_type(triplets)
     result = compute_rspt_like_stats(signal[:, DISPLAY_LEAD_IDX], ann_by_type, fs)
+    print("\n--- QTDB alapú eredmények (utolsó előtti komplexus) ---")
     print_result(result)
 
     # RSPT analízis meghívása
@@ -177,8 +189,9 @@ if __name__ == "__main__":
     rspt_result = rspt_module.analyse_ecg(signal, fs)
     #print('annots1: ', ann_by_type)
     print('annots2: ', rspt_result['annotations'])
-    plot_annotations(signal[:, DISPLAY_LEAD_IDX], ann_by_type, rspt_result['annotations'], fs)
+    
     #rspt_result = rspt.analyze_ecg(ecg_signal=signal.tolist(), sampling_rate=fs, leads=[LEAD_IDX])
+    print("\n--- RSPT alapú eredmények (utolsó előtti komplexus) ---")
     print_result(rspt_result)
 
     # Eredmények összehasonlítása
@@ -205,3 +218,5 @@ for key in keys_to_compare:
         print(f"{key:<25} QTDB: {own_val:<10.2f} | RSPT: {rspt_val:<10.2f} | Δ: {diff:<8.2f} | Δ%: {pct_diff:.2f}%")
     else:
         print(f"{key:<25} Érték hiányzik.")
+
+plot_annotations(signal[:, DISPLAY_LEAD_IDX], ann_by_type, rspt_result['annotations'], fs)

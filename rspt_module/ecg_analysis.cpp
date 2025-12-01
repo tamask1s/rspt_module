@@ -139,12 +139,12 @@ unsigned int find_min_with_baseline_correction(const double* signal, unsigned in
     double min_val = std::numeric_limits<double>::max();
     unsigned int min_idx = start_idx;
 
-    cout << "---------------------------------------------------------------------" << endl;
+    //cout << "---------------------------------------------------------------------" << endl;
     for (unsigned int i = start_idx; i <= end_idx; ++i)
     {
         double baseline = m * (double)(i) + b;
         double corrected = signal[i] - baseline;
-        cout << corrected << " \t " << signal[i] << endl;
+        //cout << corrected << " \t " << signal[i] << endl;
         if (corrected < min_val)
         {
             min_val = corrected;
@@ -458,7 +458,7 @@ int create_ideal_signal(double* res, double** leads, size_t nr_channels, size_t 
         double w = scores[k].snr / (wsum + 1e-12);
         w = 1.0 / (double)K;
         accumulate_aligned(res, leads[scores[k].ch], nr_samples, t_start, t_end, scores[k].dt, scores[k].sign * w);
-        cout << "scores[k].sign: " << scores[k].sign << " leads[scores[k].ch] " << leads[scores[k].ch][0] << " res[0] " << res[0] << " W: " << w << endl;
+        //cout << "scores[k].sign: " << scores[k].sign << " leads[scores[k].ch] " << leads[scores[k].ch][0] << " res[0] " << res[0] << " W: " << w << endl;
     }
 
     return 0;
@@ -1098,7 +1098,7 @@ static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch
     // T
     //unsigned int t_search_start = 0.15 * sampling_rate;
     unsigned int t_search_start = pos.s_idx + 0.05 * sampling_rate;
-    cout << "--------------------------t_search_start " << t_search_start << " pos.s_idx " << pos.s_idx << " sampling_rate " << sampling_rate << endl;
+    //cout << "--------------------------t_search_start " << t_search_start << " pos.s_idx " << pos.s_idx << " sampling_rate " << sampling_rate << endl;
     unsigned int t_search_end = std::min(r_idx + (unsigned int)(0.40 * sampling_rate), nr_samples - 1);
 
     size_t search_samples = t_search_end - t_search_start; ///(size_t)sampling_rate * 2;
