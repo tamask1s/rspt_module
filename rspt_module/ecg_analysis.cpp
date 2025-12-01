@@ -1060,20 +1060,20 @@ int detect_p(double* ecg, size_t len, double fs, size_t q_indx, size_t& p_on_ind
 
 static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch, unsigned int r_idx, double sampling_rate, unsigned int nr_samples)
 {
-    write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window1.bin", &leads[0][0], nr_samples, sampling_rate);
+    //write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window1.bin", &leads[0][0], nr_samples, sampling_rate);
+    double** leads_cpy = new double*[nr_ch];
     for (unsigned int ch = 0; ch < nr_ch; ++ch)
     {
         iir_filter_2nd_order bandpass_filter_;
         create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 1, sampling_rate, 1, 45);
         bandpass_filter_.init_history_values(leads[ch][0], sampling_rate);
-        double* tempsig = new double[nr_samples];
+        leads_cpy[ch] = new double[nr_samples];
         for (unsigned int i = 0; i < nr_samples; i++)
-            tempsig[i] = bandpass_filter_.filter(leads[ch][i]);
+            leads_cpy[ch][i] = bandpass_filter_.filter(leads[ch][i]);
         for (int i = nr_samples - 1; i >= 0; i--)
-            leads[ch][i] = bandpass_filter_.filter(tempsig[i]);
-        delete[] tempsig;
+            leads_cpy[ch][i] = bandpass_filter_.filter(leads_cpy[ch][i]);
     }
-    write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window2.bin", &leads[0][0], nr_samples, sampling_rate);
+    //write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window2.bin", &leads[0][0], nr_samples, sampling_rate);
 
     pqrst_positions pos{};
     pos.r_idx = r_idx;
@@ -1083,17 +1083,17 @@ static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch
     unsigned int start_q = (r_idx > window_q) ? (r_idx - window_q) : 0;
 
     size_t q_indx, r_indx, s_indx;
-    detect_qrs(&leads[0][start_q], 0.8 * sampling_rate, sampling_rate, r_idx - start_q, q_indx, r_indx, s_indx);
+    detect_qrs(&leads_cpy[0][start_q], 0.8 * sampling_rate, sampling_rate, r_idx - start_q, q_indx, r_indx, s_indx);
     pos.q_idx = q_indx + start_q;
     pos.r_idx = r_indx + start_q;
     pos.s_idx = s_indx + start_q;
 
-//    pos.q_idx = find_min_from_to(leads[0], start_q, r_idx, nr_samples);
+//    pos.q_idx = find_min_from_to(leads_cpy[0], start_q, r_idx, nr_samples);
 //
 //    // S
 //    unsigned int window_s = (unsigned int)(0.04 * sampling_rate);
 //    unsigned int end_s = std::min(r_idx + window_s, nr_samples - 1);
-//    pos.s_idx = find_min_from_to(leads[0], r_idx, end_s, nr_samples);
+//    pos.s_idx = find_min_from_to(leads_cpy[0], r_idx, end_s, nr_samples);
 
     // T
     //unsigned int t_search_start = 0.15 * sampling_rate;
@@ -1103,16 +1103,16 @@ static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch
 
     size_t search_samples = t_search_end - t_search_start; ///(size_t)sampling_rate * 2;
     double* sig_window = new double[search_samples];
-    create_ideal_signal(sig_window, leads, nr_ch, nr_samples, sampling_rate, t_search_start, t_search_end, t_search_start, t_search_end);
+    create_ideal_signal(sig_window, leads_cpy, nr_ch, nr_samples, sampling_rate, t_search_start, t_search_end, t_search_start, t_search_end);
     if (false)
     {
-        write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window1.bin", &leads[0][t_search_start], search_samples, 250);
-        write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window2.bin", &leads[1][t_search_start], search_samples, 250);
+        write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window1.bin", &leads_cpy[0][t_search_start], search_samples, 250);
+        write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window2.bin", &leads_cpy[1][t_search_start], search_samples, 250);
         write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window3.bin", sig_window, search_samples, 250);
         const double* sig_window_[3];
         sig_window_[0] = sig_window;
-        sig_window_[1] = &leads[0][t_search_start];
-        sig_window_[2] = &leads[1][t_search_start];
+        sig_window_[1] = &leads_cpy[0][t_search_start];
+        sig_window_[2] = &leads_cpy[1][t_search_start];
         write_binmx_to_file("/media/sf_SharedFolder/sig_window.bin", sig_window_, 3, search_samples, 250);
     }
 
@@ -1134,14 +1134,14 @@ static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch
 
     if (false)
     {
-        //memcpy(sig_window, &leads[1][p_search_start], search_samples * 8);
-        write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window1.bin", &leads[0][p_search_start], search_samples, 250);
-        write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window2.bin", &leads[1][p_search_start], search_samples, 250);
+        //memcpy(sig_window, &leads_cpy[1][p_search_start], search_samples * 8);
+        write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window1.bin", &leads_cpy[0][p_search_start], search_samples, 250);
+        write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window2.bin", &leads_cpy[1][p_search_start], search_samples, 250);
         write_binmx_to_file_1ch("/media/sf_SharedFolder/sig_window3.bin", sig_window, search_samples, 250);
         const double* sig_window_[3];
         sig_window_[0] = sig_window;
-        sig_window_[1] = &leads[0][p_search_start];
-        sig_window_[2] = &leads[1][p_search_start];
+        sig_window_[1] = &leads_cpy[0][p_search_start];
+        sig_window_[2] = &leads_cpy[1][p_search_start];
         write_binmx_to_file("/media/sf_SharedFolder/sig_window.bin", sig_window_, 3, p_search_end - p_search_start, 250);
     }
 
@@ -1149,7 +1149,7 @@ static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch
     {
         p_search_end -= 0.03 * sampling_rate;
         search_samples = p_search_end - p_search_start;
-        create_ideal_signal(sig_window, leads, nr_ch, nr_samples, sampling_rate, p_search_start, p_search_end, p_search_start, p_search_end);
+        create_ideal_signal(sig_window, leads_cpy, nr_ch, nr_samples, sampling_rate, p_search_start, p_search_end, p_search_start, p_search_end);
         pos.p_idx = find_max_from_to(sig_window, 1, search_samples, search_samples);
         pos.p_on_idx = find_min_with_baseline_correction(sig_window, 0, pos.p_idx);
         unsigned int p_offset_end = std::min(pos.p_idx + (int)(0.20 * sampling_rate), (int)search_samples - 1);
@@ -1159,7 +1159,7 @@ static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch
     }
     else
     {
-        create_ideal_signal(sig_window, leads, nr_ch, nr_samples, sampling_rate, p_search_start, p_search_end, p_search_start, p_search_end);
+        create_ideal_signal(sig_window, leads_cpy, nr_ch, nr_samples, sampling_rate, p_search_start, p_search_end, p_search_start, p_search_end);
         size_t p_on_indx, p_off_indx, p_indx;
         /*int res = */detect_p(sig_window, search_samples, sampling_rate, pos.q_idx - p_search_start, p_on_indx, p_indx, p_off_indx);
         pos.p_on_idx = p_on_indx;
@@ -1171,20 +1171,24 @@ static pqrst_positions detect_pqrst_positions(double** leads, unsigned int nr_ch
     pos.p_on_idx += p_search_start;
     pos.p_off_idx += p_search_start;
 
-    //pos.p_idx = find_max_with_baseline_correction(leads[1], p_search_start + 1, p_search_end);
+    //pos.p_idx = find_max_with_baseline_correction(leads_cpy[1], p_search_start + 1, p_search_end);
     /*
-    pos.p_idx = find_max_with_baseline_correction(leads[1], p_search_start + 1, p_search_end);
-    pos.p_on_idx = find_min_with_baseline_correction(leads[1], p_search_start, pos.p_idx);
-    pos.p_off_idx = find_min_with_baseline_correction(leads[1], pos.p_idx, pos.q_idx);
+    pos.p_idx = find_max_with_baseline_correction(leads_cpy[1], p_search_start + 1, p_search_end);
+    pos.p_on_idx = find_min_with_baseline_correction(leads_cpy[1], p_search_start, pos.p_idx);
+    pos.p_off_idx = find_min_with_baseline_correction(leads_cpy[1], pos.p_idx, pos.q_idx);
     */
 
+    for (unsigned int ch = 0; ch < nr_ch; ++ch)
+        delete[] leads_cpy[ch];
+    delete[] leads_cpy;
     delete[] sig_window;
+
     return pos;
 }
 
 static void fill_analysis_result(ecg_analysis_result& result, const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples, double sampling_rate, pqrst_positions& pos)
 {
-    result.pr_interval_ms = (pos.q_idx - pos.p_off_idx) / sampling_rate * 1000.0;
+    result.pr_interval_ms = (pos.q_idx - pos.p_on_idx) / sampling_rate * 1000.0;
     result.p_wave_duration_ms = (pos.p_off_idx - pos.p_on_idx) / sampling_rate * 1000.0;
     unsigned int window_isoelectric_search = (unsigned int)(0.005 * sampling_rate);
     int qrs_start = find_isoelectric_point_before(ecg_signal[1], pos.q_idx - window_isoelectric_search, pos.q_idx);
