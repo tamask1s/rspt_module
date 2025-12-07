@@ -46,7 +46,7 @@ def plot_annotations(signal, ann_by_type, rspt_annotations, fs):
     if not all(len(ann_by_type[k]) >= 2 for k in ['p', 'N', 't']):
         raise ValueError("Nem található elég teljes PQRST komplexum a megjelenítéshez.")
 
-    idx = -1  # utolsó előtti
+    idx = 0 # -1  # utolsó előtti
     p_on, p_peak, p_off = ann_by_type['p'][idx]
     r_on, r_peak, r_off = ann_by_type['N'][idx]
     t_on, t_peak, t_off = ann_by_type['t'][idx]

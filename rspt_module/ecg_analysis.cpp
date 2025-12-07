@@ -1303,7 +1303,7 @@ void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, uns
     result.pathologic_status[0] = 0;
     std::snprintf(result.status_message, sizeof(result.status_message), "OK");
 
-    if (peak_indexes.size() < 2)
+    if (peak_indexes.size() < 1)
     {
         result.analysis_status = 1;
         std::snprintf(result.status_message, sizeof(result.status_message), "Not enough R peaks for RR calculation");
@@ -1324,7 +1324,7 @@ void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, uns
         return;
     }
 
-    pqrst_positions pos = detect_pqrst_positions((double**)ecg_signal, nr_ch, peak_indexes[peak_indexes.size() - 2], sampling_rate, nr_samples_per_ch);
+    pqrst_positions pos = detect_pqrst_positions((double**)ecg_signal, nr_ch, peak_indexes[0], sampling_rate, nr_samples_per_ch);
     calculate_rr_statistics(peak_indexes, sampling_rate, result);
     fill_analysis_result(result, ecg_signal, nr_ch, nr_samples_per_ch, sampling_rate, pos);
     fill_annotations(annotations, pos);
