@@ -1,6 +1,29 @@
 
+struct first_ch_result
+{
+    double P1_DURATION;
+    double P1_AMPLITUDE;
+    double P2_DURATION;
+    double P2_AMPLITUDE;
+
+    double Q_DURATION;
+    double Q_AMPLITUDE;
+    double R_DURATION;
+    double R_AMPLITUDE;
+    double S_DURATION;
+    double S_AMPLITUDE;
+
+    double J_AMPLITUDE;
+    double ST_20_AMPLITUDE;
+    double ST_40_AMPLITUDE;
+    double ST_60_AMPLITUDE;
+    double ST_80_AMPLITUDE;
+    double T_AMPLITUDE;
+};
+
 struct ecg_analysis_result
 {
+    first_ch_result result;
     double heart_rate_bpm;
     double rr_interval_ms;
     double rr_variation_ms;
