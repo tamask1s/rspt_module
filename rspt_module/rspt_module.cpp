@@ -186,6 +186,27 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
     output["analysis_status"]           = result.analysis_status;
     output["status_message"]            = std::string(result.status_message);
 
+    output["P1_DURATION"] = result.result.P1_DURATION;
+    output["P1_AMPLITUDE"] = result.result.P1_AMPLITUDE;
+    output["P2_DURATION"] = result.result.P2_DURATION;
+    output["P2_AMPLITUDE"] = result.result.P2_AMPLITUDE;
+
+    output["Q_DURATION"] = result.result.Q_DURATION;
+    output["Q_AMPLITUDE"] = result.result.Q_AMPLITUDE;
+    output["R_DURATION"] = result.result.R_DURATION;
+    output["R_AMPLITUDE"] = result.result.R_AMPLITUDE;
+    output["S_DURATION"] = result.result.S_DURATION;
+    output["S_AMPLITUDE"] = result.result.S_AMPLITUDE;
+
+    output["QRS_DURATION"] = result.result.QRS_DURATION;
+
+    output["J_AMPLITUDE"] = result.result.J_AMPLITUDE;
+    output["ST_20_AMPLITUDE"] = result.result.ST_20_AMPLITUDE;
+    output["ST_40_AMPLITUDE"] = result.result.ST_40_AMPLITUDE;
+    output["ST_60_AMPLITUDE"] = result.result.ST_60_AMPLITUDE;
+    output["ST_80_AMPLITUDE"] = result.result.ST_80_AMPLITUDE;
+    output["T_AMPLITUDE"] = result.result.T_AMPLITUDE;
+
     return output;
 }
 

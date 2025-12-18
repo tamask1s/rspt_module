@@ -1558,6 +1558,104 @@ void search_p_and_t_peaks(double* signal, /*double* deriv, */int len, double fs,
 //    return -1; // nem található isoelektromos szakasz
 //}
 
+
+static double mean(const double* s, int a, int b)
+{
+    if (a <= 0 || b <= a) return 0.0;
+    double sum = 0.0;
+    for (int i = a; i < b; i++)
+        sum += s[i];
+    return sum / (b - a);
+}
+
+
+ch_result fill_results(double* signal, int len, pqrst_indxes a)
+{
+    ch_result r;
+    memset(&r, 0, sizeof(ch_result));
+
+    /* ---------------- P WAVES ---------------- */
+
+    if (a.p[0] > 0 && a.p[2] > a.p[0])
+    {
+        r.P1_DURATION  = a.p[2] - a.p[0];
+        r.P1_AMPLITUDE = signal[a.p[1]];
+    }
+
+    if (a.p[3] > 0 && a.p[5] > a.p[3])
+    {
+        r.P2_DURATION  = a.p[5] - a.p[3];
+        r.P2_AMPLITUDE = signal[a.p[4]];
+    }
+
+    /* ---------------- QRS ---------------- */
+
+    if (a.r[0] > 0 && a.r[2] > a.r[0])
+    {
+        r.QRS_DURATION = a.r[2] - a.r[0];
+
+        r.R_DURATION  = a.r[2] - a.r[0];
+        r.R_AMPLITUDE = signal[a.r[1]];
+
+        /* Q: minimum before R peak */
+        double q_min = signal[a.r[1]];
+        int q_idx = a.r[1];
+
+        for (int i = a.r[0]; i < a.r[1]; i++)
+        {
+            if (signal[i] < q_min)
+            {
+                q_min = signal[i];
+                q_idx = i;
+            }
+        }
+
+        r.Q_DURATION  = (q_idx > a.r[0]) ? (q_idx - a.r[0]) : 0;
+        r.Q_AMPLITUDE = q_min;
+
+        /* S: minimum after R peak */
+        double s_min = signal[a.r[1]];
+        int s_idx = a.r[1];
+
+        for (int i = a.r[1]; i < a.r[2]; i++)
+        {
+            if (signal[i] < s_min)
+            {
+                s_min = signal[i];
+                s_idx = i;
+            }
+        }
+
+        r.S_DURATION  = (a.r[2] > s_idx) ? (a.r[2] - s_idx) : 0;
+        r.S_AMPLITUDE = s_min;
+    }
+
+    /* ---------------- BASELINE ---------------- */
+
+    double baseline = 0.0;
+    if (a.p[0] > 0 && a.p[2] > a.p[0])
+        baseline = mean(signal, a.p[0], a.p[2]);
+
+    /* ---------------- ST / T ---------------- */
+
+    int j = a.r[2]; // J-point = QRS end
+
+    if (j > 0 && j < len)
+    {
+        r.J_AMPLITUDE = signal[j] - baseline;
+
+        if (j + 20 < len) r.ST_20_AMPLITUDE = signal[j + 20] - baseline;
+        if (j + 40 < len) r.ST_40_AMPLITUDE = signal[j + 40] - baseline;
+        if (j + 60 < len) r.ST_60_AMPLITUDE = signal[j + 60] - baseline;
+        if (j + 80 < len) r.ST_80_AMPLITUDE = signal[j + 80] - baseline;
+    }
+
+    if (a.t[1] > 0 && a.t[1] < len)
+        r.T_AMPLITUDE = signal[a.t[1]] - baseline;
+
+    return r;
+}
+
 void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, ecg_analysis_result& result, unsigned int analysis_ch_indx = 0)
 {
     annotations.clear();
@@ -1633,6 +1731,8 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     annotations[0].t[0] = isoel_t_l;
     annotations[0].t[1] = peak_t;
     annotations[0].t[2] = isoel_t_r;
+
+    result.result = fill_results(lead_cpy, nr_samples_per_ch, annotations[0]);
 
     //cout << "isoel_start: " << isoel_start / 500.0 << " isoel_r: " << isoel_r / 500.0 << endl;
 

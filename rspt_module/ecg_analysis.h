@@ -1,29 +1,31 @@
 
-struct first_ch_result
+struct ch_result
 {
-    double P1_DURATION;
-    double P1_AMPLITUDE;
-    double P2_DURATION;
-    double P2_AMPLITUDE;
+    int P1_DURATION;
+    int P1_AMPLITUDE;
+    int P2_DURATION;
+    int P2_AMPLITUDE;
 
-    double Q_DURATION;
-    double Q_AMPLITUDE;
-    double R_DURATION;
-    double R_AMPLITUDE;
-    double S_DURATION;
-    double S_AMPLITUDE;
+    int Q_DURATION;
+    int Q_AMPLITUDE;
+    int R_DURATION;
+    int R_AMPLITUDE;
+    int S_DURATION;
+    int S_AMPLITUDE;
 
-    double J_AMPLITUDE;
-    double ST_20_AMPLITUDE;
-    double ST_40_AMPLITUDE;
-    double ST_60_AMPLITUDE;
-    double ST_80_AMPLITUDE;
-    double T_AMPLITUDE;
+    int QRS_DURATION;
+
+    int J_AMPLITUDE;
+    int ST_20_AMPLITUDE;
+    int ST_40_AMPLITUDE;
+    int ST_60_AMPLITUDE;
+    int ST_80_AMPLITUDE;
+    int T_AMPLITUDE;
 };
 
 struct ecg_analysis_result
 {
-    first_ch_result result;
+    ch_result result;
     double heart_rate_bpm;
     double rr_interval_ms;
     double rr_variation_ms;
@@ -57,9 +59,9 @@ struct ecg_analysis_result
 
 struct pqrst_indxes
 {
-    int32_t p[3];
-    int32_t r[3];
-    int32_t t[3];
+    int32_t p[6]; /// p1_on_index, p1_peak_index, p1_off_index, p2_on_index, p2_peak_index, p2_off_index. If p2_on_index, p2_peak_index, p2_off_index are set to 0, p2 is not present.
+    int32_t r[3]; /// r_on_index, r_peak_index, r_off_index
+    int32_t t[3]; /// t_on_index, t_peak_index, t_off_index
 };
 
 void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, ecg_analysis_result& result);
