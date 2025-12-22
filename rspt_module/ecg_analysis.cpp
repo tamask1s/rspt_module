@@ -1412,6 +1412,7 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
             break;
         }
     }
+    isoel_l += nr_isoel_samples * 6;
     if (isoel_l > -1)
     {
         int mid = (start_indx - isoel_l) / 2 + isoel_l;
@@ -1444,8 +1445,7 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
             break;
         }
     }
-    isoel_l += nr_isoel_samples * 3;
-    isoel_r += nr_isoel_samples * 3;
+    isoel_r += nr_isoel_samples * 6;
     if (isoel_r > -1)
     {
         int mid = (isoel_r - start_indx) / 2 + start_indx;
@@ -1574,18 +1574,25 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a)
     ch_result r;
     memset(&r, 0, sizeof(ch_result));
 
+    /* ---------------- BASELINE ----------------
+       CTS: lokális baseline a P1 végén
+    */
+    double baseline = 0.0;
+    if (a.p[2] > 0 && a.p[2] < len)
+        baseline = signal[a.p[2]];
+
     /* ---------------- P WAVES ---------------- */
 
     if (a.p[0] > 0 && a.p[2] > a.p[0])
     {
         r.P1_DURATION  = a.p[2] - a.p[0];
-        r.P1_AMPLITUDE = signal[a.p[1]] - signal[a.p[2]];
+        r.P1_AMPLITUDE = signal[a.p[1]] - baseline;
     }
 
     if (a.p[3] > 0 && a.p[5] > a.p[3])
     {
         r.P2_DURATION  = a.p[5] - a.p[3];
-        r.P2_AMPLITUDE = signal[a.p[4]];
+        r.P2_AMPLITUDE = signal[a.p[4]] - baseline;
     }
 
     /* ---------------- QRS ---------------- */
@@ -1595,9 +1602,10 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a)
         r.QRS_DURATION = a.r[2] - a.r[0];
 
         r.R_DURATION  = a.r[2] - a.r[0];
-        r.R_AMPLITUDE = signal[a.r[1]] - signal[a.r[2]];
+        r.R_AMPLITUDE = signal[a.r[1]] - baseline;
 
-        /* Q: minimum before R peak */
+        /* ---- Q wave (min before R peak) ---- */
+
         double q_min = signal[a.r[1]];
         int q_idx = a.r[1];
 
@@ -1611,13 +1619,18 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a)
         }
 
         r.Q_DURATION  = (q_idx > a.r[0]) ? (q_idx - a.r[0]) : 0;
-        r.Q_AMPLITUDE = q_min;
+        r.Q_AMPLITUDE = q_min - baseline;
 
-        /* S: minimum after R peak */
+        /* ---- S wave (min shortly after R peak) ---- */
+
         double s_min = signal[a.r[1]];
         int s_idx = a.r[1];
 
-        for (int i = a.r[1]; i < a.r[2]; i++)
+        int s_search_end = a.r[1] + 30; // ~30 ms window
+        if (s_search_end > a.r[2])
+            s_search_end = a.r[2];
+
+        for (int i = a.r[1]; i < s_search_end; i++)
         {
             if (signal[i] < s_min)
             {
@@ -1626,32 +1639,29 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a)
             }
         }
 
-        r.S_DURATION  = (a.r[2] > s_idx) ? (a.r[2] - s_idx) : 0;
-        r.S_AMPLITUDE = s_min;
+        r.S_DURATION  = (s_idx < a.r[2]) ? (s_search_end - s_idx) : 0;
+        r.S_AMPLITUDE = s_min - baseline;
     }
 
-    /* ---------------- BASELINE ---------------- */
-
-    double baseline = 0.0;
-    if (a.p[0] > 0 && a.p[2] > a.p[0])
-        baseline = mean(signal, a.p[0], a.p[2]);
-
-    /* ---------------- ST / T ---------------- */
+    /* ---------------- ST / J ---------------- */
 
     int j = a.r[2]; // J-point = QRS end
 
     if (j > 0 && j < len)
     {
-        r.J_AMPLITUDE = signal[j] - baseline;
+        /* CTS: J amplitude = 0 by definition */
+        r.J_AMPLITUDE = 0.0;
 
-        if (j + 20 < len) r.ST_20_AMPLITUDE = signal[j + 20] - baseline;
-        if (j + 40 < len) r.ST_40_AMPLITUDE = signal[j + 40] - baseline;
-        if (j + 60 < len) r.ST_60_AMPLITUDE = signal[j + 60] - baseline;
-        if (j + 80 < len) r.ST_80_AMPLITUDE = signal[j + 80] - baseline;
+        if (j + 20 < len) r.ST_20_AMPLITUDE = signal[j + 20] - signal[j];
+        if (j + 40 < len) r.ST_40_AMPLITUDE = signal[j + 40] - signal[j];
+        if (j + 60 < len) r.ST_60_AMPLITUDE = signal[j + 60] - signal[j];
+        if (j + 80 < len) r.ST_80_AMPLITUDE = signal[j + 80] - signal[j];
     }
 
+    /* ---------------- T ---------------- */
+
     if (a.t[1] > 0 && a.t[1] < len)
-        r.T_AMPLITUDE = signal[a.t[1]] - signal[a.t[2]];
+        r.T_AMPLITUDE = signal[a.t[1]] - baseline;
 
     return r;
 }
@@ -1692,15 +1702,24 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     }
 
     unsigned int ch = analysis_ch_indx;
-    iir_filter_2nd_order bandpass_filter_;
-    create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 1, sampling_rate, 0.5, 35);
-    bandpass_filter_.init_history_values(ecg_signal[ch][0], sampling_rate);
     double* lead_cpy = new double[nr_samples_per_ch];
-    for (unsigned int i = 0; i < nr_samples_per_ch; i++)
-        lead_cpy[i] = bandpass_filter_.filter(ecg_signal[ch][i]);
-    bandpass_filter_.init_history_values(lead_cpy[nr_samples_per_ch - 1], sampling_rate);
-    for (int i = nr_samples_per_ch - 1; i >= 0; i--)
-        lead_cpy[i] = bandpass_filter_.filter(lead_cpy[i]);
+    if (true)
+    {
+        iir_filter_2nd_order bandpass_filter_;
+        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 1, sampling_rate, 0.3, 47);
+        bandpass_filter_.init_history_values(ecg_signal[ch][0], sampling_rate);
+        for (unsigned int i = 0; i < nr_samples_per_ch; i++)
+            lead_cpy[i] = bandpass_filter_.filter(ecg_signal[ch][i]);
+        bandpass_filter_.init_history_values(lead_cpy[nr_samples_per_ch - 1], sampling_rate);
+        for (int i = nr_samples_per_ch - 1; i >= 0; i--)
+            lead_cpy[i] = bandpass_filter_.filter(lead_cpy[i]);
+    }
+    else
+    {
+        for (unsigned int i = 0; i < nr_samples_per_ch; i++)
+            lead_cpy[i] = ecg_signal[ch][i];
+    }
+
     write_binmx_to_file("c:/Tamas/test001.bin", (const double**)&lead_cpy, 1, nr_samples_per_ch, sampling_rate);
 //    std::sort(lead_cpy, lead_cpy + nr_samples_per_ch);
 //    for (unsigned int i = 0; i < nr_samples_per_ch; i++)
@@ -1713,7 +1732,7 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, 300, 300, isoel_start, isoel_r, peak_p, peak_t);
 
     int isoel_p_l = -1, isoel_p_r = -1;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p, 170, 4, 35, isoel_p_l, isoel_p_r, 0.02);
+    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p, 170, 4, 35, isoel_p_l, isoel_p_r, 0.05);
 
     int isoel_t_l = -1, isoel_t_r = -1;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_t, 220, 2, 35, isoel_t_l, isoel_t_r, 0.02);
