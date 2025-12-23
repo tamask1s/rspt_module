@@ -1344,6 +1344,13 @@ double median(const double* data, int len)
         return (v[len/2 - 1] + v[len/2]) * 0.5;
 }
 
+inline int clamp(int i, int len)
+{
+    if (i < 0)      return 0;
+    if (i >= len)   return len - 1;
+    return i;
+}
+
 void search_isoel_bounds(double* signal, int len, double fs, int start_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01)
 {
     //cout << endl << "------------------------------------------------------------" << endl;
@@ -1368,25 +1375,23 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
 
     std::vector<double> deriv(len, 0.0);
 
-    int limit = len - 2 * nr_isoel_samples;
-    if (limit < 0) limit = 0;
-    for (int i = 0; i < limit; ++i)
+    for (int i = 0; i < len; ++i)
+    {
         for (int j = 0; j < nr_isoel_samples; ++j)
-            deriv[i] += fabs(signal[i + j] - signal[i + j + nr_isoel_samples]);
+            deriv[i] += fabs(signal[clamp(i + j, len)] - signal[clamp(i + j + nr_isoel_samples, len)]);
+        for (int j = 0; j < nr_isoel_samples; ++j)
+            deriv[i] += fabs(signal[clamp(i - j, len)] - signal[clamp(i - j - nr_isoel_samples, len)]);
+    }
 
-    int nr_isoel_samples_m = nr_isoel_samples * 2;
-    limit = len - 2 * nr_isoel_samples_m;
-    if (limit < 0) limit = 0;
-    for (int i = 0; i < limit; ++i)
-        for (int j = 0; j < nr_isoel_samples_m; ++j)
-            deriv[i] += fabs(signal[i + j] - signal[i + j + nr_isoel_samples_m]);
+    int nr_isoel_samples_m = nr_isoel_samples * 3;
 
-    nr_isoel_samples_m *= 3;
-    limit = len - 2 * nr_isoel_samples_m;
-    if (limit < 0) limit = 0;
-    for (int i = 0; i < limit; ++i)
+    for (int i = 0; i < len; ++i)
+    {
         for (int j = 0; j < nr_isoel_samples_m; ++j)
-            deriv[i] += fabs(signal[i + j] - signal[i + j + nr_isoel_samples_m]);
+            deriv[i] += fabs(signal[clamp(i + j, len)] - signal[clamp(i + j + nr_isoel_samples_m, len)]);
+        for (int j = 0; j < nr_isoel_samples_m; ++j)
+            deriv[i] += fabs(signal[clamp(i - j, len)] - signal[clamp(i - j - nr_isoel_samples_m, len)]);
+    }
 
     double min_val = 1e9, max_val = -1e9;
     for (int i = 0; i < len; ++i)
@@ -1396,7 +1401,8 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
     }
 
     double qrs_amp = max_val - min_val;
-    double max_allowed_dev = qrs_amp * isoel_tolerance;
+    double deriv_baseline = median(&deriv[0], len);
+    double max_allowed_dev = deriv_baseline + qrs_amp * isoel_tolerance;
 
     std::vector<double> treshold(len, max_allowed_dev);
     write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&treshold, 1, len, fs);
@@ -1412,7 +1418,7 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
             break;
         }
     }
-    isoel_l += nr_isoel_samples * 6;
+
     if (isoel_l > -1)
     {
         int mid = (start_indx - isoel_l) / 2 + isoel_l;
@@ -1445,7 +1451,9 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
             break;
         }
     }
-    isoel_r += nr_isoel_samples * 6;
+    if (isoel_r > -1 && isoel_l == -1 && ((double)isoel_r / fs < .15))
+        isoel_l = 0;
+
     if (isoel_r > -1)
     {
         int mid = (isoel_r - start_indx) / 2 + start_indx;
@@ -1568,88 +1576,94 @@ static double mean(const double* s, int a, int b)
     return sum / (b - a);
 }
 
-
-ch_result fill_results(double* signal, int len, pqrst_indxes a)
+ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs)
 {
     ch_result r;
     memset(&r, 0, sizeof(ch_result));
 
-    /* ---------------- BASELINE ----------------
-       CTS: lokális baseline a P1 végén
-    */
-    double baseline = 0.0;
-    if (a.p[2] > 0 && a.p[2] < len)
-        baseline = signal[a.p[2]];
+    /* ================= BASELINE ================= */
 
-    /* ---------------- P WAVES ---------------- */
+    std::vector<double> buf(signal, signal + len);
+    std::nth_element(buf.begin(), buf.begin() + len / 2, buf.end());
+    double baseline = buf[len / 2];
 
-    if (a.p[0] > 0 && a.p[2] > a.p[0])
+    /* ================= P WAVES ================= */
+
+    // P1
+    if (a.p[0] >= 0 && a.p[1] >= 0 && a.p[2] >= 0 &&
+        a.p[0] < a.p[1] && a.p[1] < a.p[2] && a.p[2] < len)
     {
-        r.P1_DURATION  = a.p[2] - a.p[0];
+        r.P1_DURATION  = (a.p[2] - a.p[0]) * 1000.0 / fs;
         r.P1_AMPLITUDE = signal[a.p[1]] - baseline;
     }
 
-    if (a.p[3] > 0 && a.p[5] > a.p[3])
+    // P2 (optional)
+    if (a.p[3] >= 0 && a.p[4] >= 0 && a.p[5] >= 0 &&
+        a.p[3] < a.p[4] && a.p[4] < a.p[5] && a.p[5] < len)
     {
-        r.P2_DURATION  = a.p[5] - a.p[3];
+        r.P2_DURATION  = (a.p[5] - a.p[3]) * 1000.0 / fs;
         r.P2_AMPLITUDE = signal[a.p[4]] - baseline;
     }
 
-    /* ---------------- QRS ---------------- */
+    /* ================= QRS ================= */
 
-    if (a.r[0] > 0 && a.r[2] > a.r[0])
+    if (a.r[0] >= 0 && a.r[1] >= 0 && a.r[2] >= 0 &&
+        a.r[0] < a.r[1] && a.r[1] < a.r[2] && a.r[2] < len)
     {
-        r.QRS_DURATION = a.r[2] - a.r[0];
+        r.QRS_DURATION = (a.r[2] - a.r[0]) * 1000.0 / fs;
+        r.R_DURATION   = r.QRS_DURATION;
+        r.R_AMPLITUDE  = signal[a.r[1]] - baseline;
 
-        r.R_DURATION  = a.r[2] - a.r[0];
-        r.R_AMPLITUDE = signal[a.r[1]] - baseline;
+        bool r_positive = (signal[a.r[1]] >= baseline);
 
-        /* ---- Q wave (min before R peak) ---- */
+        /* ---- Q wave ---- */
+        int q_idx = -1;
+        double q_ext = signal[a.r[1]];
 
-        double q_min = signal[a.r[1]];
-        int q_idx = a.r[1];
-
-        for (int i = a.r[0]; i < a.r[1]; i++)
+        for (int i = a.r[0]; i < a.r[1]; ++i)
         {
-            if (signal[i] < q_min)
+            if ((r_positive && signal[i] < q_ext) ||
+                (!r_positive && signal[i] > q_ext))
             {
-                q_min = signal[i];
+                q_ext = signal[i];
                 q_idx = i;
             }
         }
 
-        r.Q_DURATION  = (q_idx > a.r[0]) ? (q_idx - a.r[0]) : 0;
-        r.Q_AMPLITUDE = q_min - baseline;
-
-        /* ---- S wave (min shortly after R peak) ---- */
-
-        double s_min = signal[a.r[1]];
-        int s_idx = a.r[1];
-
-        int s_search_end = a.r[1] + 30; // ~30 ms window
-        if (s_search_end > a.r[2])
-            s_search_end = a.r[2];
-
-        for (int i = a.r[1]; i < s_search_end; i++)
+        if (q_idx >= 0)
         {
-            if (signal[i] < s_min)
+            r.Q_DURATION  = (q_idx - a.r[0]) * 1000.0 / fs;
+            r.Q_AMPLITUDE = q_ext - baseline;
+        }
+
+        /* ---- S wave ---- */
+        int s_idx = -1;
+        double s_ext = signal[a.r[1]];
+
+        int s_end = std::min(a.r[2], a.r[1] + int(0.04 * fs)); // ~40 ms
+
+        for (int i = a.r[1]; i < s_end; ++i)
+        {
+            if ((r_positive && signal[i] < s_ext) ||
+                (!r_positive && signal[i] > s_ext))
             {
-                s_min = signal[i];
+                s_ext = signal[i];
                 s_idx = i;
             }
         }
 
-        r.S_DURATION  = (s_idx < a.r[2]) ? (s_search_end - s_idx) : 0;
-        r.S_AMPLITUDE = s_min - baseline;
+        if (s_idx >= 0)
+        {
+            r.S_DURATION  = (a.r[2] - s_idx) * 1000.0 / fs;
+            r.S_AMPLITUDE = s_ext - baseline;
+        }
     }
 
-    /* ---------------- ST / J ---------------- */
+    /* ================= ST / J ================= */
 
-    int j = a.r[2]; // J-point = QRS end
-
-    if (j > 0 && j < len)
+    int j = a.r[2];
+    if (j >= 0 && j < len)
     {
-        /* CTS: J amplitude = 0 by definition */
         r.J_AMPLITUDE = 0.0;
 
         if (j + 20 < len) r.ST_20_AMPLITUDE = signal[j + 20] - signal[j];
@@ -1658,9 +1672,9 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a)
         if (j + 80 < len) r.ST_80_AMPLITUDE = signal[j + 80] - signal[j];
     }
 
-    /* ---------------- T ---------------- */
+    /* ================= T ================= */
 
-    if (a.t[1] > 0 && a.t[1] < len)
+    if (a.t[1] >= 0 && a.t[1] < len)
         r.T_AMPLITUDE = signal[a.t[1]] - baseline;
 
     return r;
@@ -1703,7 +1717,7 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
 
     unsigned int ch = analysis_ch_indx;
     double* lead_cpy = new double[nr_samples_per_ch];
-    if (true)
+    if (false)
     {
         iir_filter_2nd_order bandpass_filter_;
         create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 1, sampling_rate, 0.3, 47);
@@ -1732,12 +1746,13 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, 300, 300, isoel_start, isoel_r, peak_p, peak_t);
 
     int isoel_p_l = -1, isoel_p_r = -1;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p, 170, 4, 35, isoel_p_l, isoel_p_r, 0.05);
+    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p, 170, 4, 35, isoel_p_l, isoel_p_r, 0.005);
 
     int isoel_t_l = -1, isoel_t_r = -1;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_t, 220, 2, 35, isoel_t_l, isoel_t_r, 0.02);
+    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_t, 220, 4, 35, isoel_t_l, isoel_t_r, 0.02);
 
     //cout << "peak_p: " << peak_p / 500.0 << " peak_t: " << peak_t / 500.0 << endl;
+    cout << "isoel_p_l: " << isoel_p_l << endl;
     annotations.push_back({});
     annotations[0].p[0] = isoel_p_l;
     annotations[0].p[1] = peak_p;
@@ -1751,7 +1766,7 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     annotations[0].t[1] = peak_t;
     annotations[0].t[2] = isoel_t_r;
 
-    result.result = fill_results(lead_cpy, nr_samples_per_ch, annotations[0]);
+    result.result = fill_results(lead_cpy, nr_samples_per_ch, annotations[0], sampling_rate);
 
     cout << "----------------------------- " << endl;
     cout << "P1_DURATION: " << result.result.P1_DURATION << endl;
