@@ -1351,6 +1351,192 @@ inline int clamp(int i, int len)
     return i;
 }
 
+void fix_wave_bounderies_cz(double* signal, double base_line, int len, double fs, int& bound_l, int& bound_r)
+{
+    // =========================================================
+    // 1. BAL OLDALI PADDING – VÁLTOZATLAN
+    // =========================================================
+    double bound_l_ms = bound_l * 1000.0 / fs;
+    int padding_samples = 0;
+    if (bound_l_ms < 100)
+        padding_samples = (int)((100.0 - bound_l_ms) * fs / 1000.0);
+
+    int N = len + padding_samples;
+    std::vector<double> sig(N);
+
+    for (int i = 0; i < padding_samples; ++i)
+        sig[i] = base_line;
+
+    memcpy(sig.data() + padding_samples, signal, len * sizeof(double));
+
+    // =========================================================
+    // 2. SIMÍTÁS – BASELINE-TRENDHEZ
+    // =========================================================
+    int win = (int)(0.020 * fs); // 20 ms – trendet követ
+    if (win < 3) win = 3;
+
+    std::vector<double> smooth(N, 0.0);
+    for (int i = win; i < N - win; ++i)
+    {
+        double s = 0.0;
+        for (int k = -win; k <= win; ++k)
+            s += sig[i + k];
+        smooth[i] = s / (2 * win + 1);
+    }
+
+    // =========================================================
+    // 3. AMPLITÚDÓ A BASELINE-HOZ KÉPEST
+    // =========================================================
+    std::vector<double> amp(N, 0.0);
+    for (int i = 0; i < N; ++i)
+        amp[i] = std::abs(smooth[i] - base_line);
+
+    double max_amp = 0.0;
+    for (int i = 0; i < N; ++i)
+        max_amp = std::max(max_amp, amp[i]);
+
+    // CTS-en bevált: nagyon alacsony baseline-küszöb
+    double base_thr = 0.08 * max_amp;
+
+    // =========================================================
+    // 4. BAL BOUND FINOMÍTÁS (VÁLTOZATLAN LOGIKA)
+    // =========================================================
+    int l = padding_samples + bound_l;
+
+    for (int i = l; i > 1; --i)
+    {
+        if (amp[i] < base_thr)
+        {
+            bool stable = true;
+            int hold = (int)(0.012 * fs);
+            for (int k = 0; k < hold; ++k)
+            {
+                if (i - k < 0 || amp[i - k] > base_thr)
+                {
+                    stable = false;
+                    break;
+                }
+            }
+            if (stable)
+            {
+                l = i;
+                break;
+            }
+        }
+    }
+
+    // =========================================================
+    // 5. JOBB BOUND – BASELINE-ALAPÚ LEZÁRÁS
+    // =========================================================
+    int r0 = padding_samples + bound_r;
+    int r = r0;
+
+    int max_search = (int)(0.16 * fs); // széles P ENGEDVE (160 ms)
+
+    for (int i = r0; i < std::min(N - 1, l + max_search); ++i)
+    {
+        if (amp[i] < base_thr)
+        {
+            bool stable = true;
+            int hold = (int)(0.015 * fs); // 15 ms baseline-közelség
+            for (int k = 0; k < hold; ++k)
+            {
+                if (i + k >= N || amp[i + k] > base_thr)
+                {
+                    stable = false;
+                    break;
+                }
+            }
+            if (stable)
+            {
+                r = i;
+                break;
+            }
+        }
+    }
+
+    // =========================================================
+    // 6. PADDING VISSZAVONÁSA
+    // =========================================================
+    bound_l = std::max(0, l - padding_samples);
+    bound_r = std::min(len - 1, r - padding_samples);
+}
+
+void fix_wave_bounderies(double* signal, double base_line, int len, double fs, double radius, int& bound_l, int& bound_r)
+{
+    cout << bound_l / fs << " to " << bound_r / fs << endl;
+    // =========================================================
+    // 1. BAL OLDALI PADDING – VÁLTOZATLAN
+    // =========================================================
+    double bound_l_ms = bound_l * 1000.0 / fs;
+    int padding_samples = 0;
+    //if (bound_l_ms < 100)
+      //  padding_samples = (int)((100.0 - bound_l_ms) * fs / 1000.0);
+
+    int N = len + padding_samples;
+    std::vector<double> sig(N);
+
+    for (int i = 0; i < padding_samples; ++i)
+        sig[i] = base_line;
+
+    memcpy(sig.data() + padding_samples, signal, len * sizeof(double));
+    bound_l += padding_samples;
+    bound_r += padding_samples;
+
+    for (int i = 0; i < N; ++i)
+        sig[i] = fabs(sig[i]);
+
+    double min_amp = 0.0, max_amp = -1e9;
+    int maxindx = 0;
+    for (int i = bound_l; i < bound_r; ++i)
+    {
+        min_amp = std::min(min_amp, sig[i]);
+        if (max_amp < sig[i])
+        {
+            max_amp = sig[i];
+            maxindx = i;
+        }
+    }
+
+    cout << maxindx / fs << endl;
+
+    double base_thr = 0.02 * (max_amp - min_amp) + min_amp;
+    int radius_samples = radius * fs / 1000.0;
+    int start = maxindx - radius_samples;
+    if (start < 0) start = 0;
+    int stop = maxindx + radius_samples;
+    if (stop >= len) stop = len;
+    bound_l = start;
+    bound_r = stop;
+    int offcount = 0;
+    for (int i = start; i < stop; ++i)
+    {
+        if (sig[i] < base_thr)
+        {
+            offcount = 0;
+            bound_l = i;
+        }
+        else
+            offcount++;
+        if (offcount == 4)
+            break;
+    }
+    for (int i = stop; i >= start; --i)
+    {
+        if (sig[i] < base_thr)
+        {
+            offcount = 0;
+            bound_r = i;
+        }
+        else
+            offcount++;
+        if (offcount == 4)
+            break;
+    }
+    bound_l -= padding_samples;
+    bound_r -= padding_samples;
+}
+
 void search_isoel_bounds(double* signal, int len, double fs, int start_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1)
 {
     //cout << endl << "------------------------------------------------------------" << endl;
@@ -1405,13 +1591,10 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
     double signal_baseline = median(&signal[0], len);
     double max_allowed_dev = deriv_baseline + qrs_amp * isoel_tolerance;
 
-
     isoel_l = -1;
-    //cout << "start_indx: " << start_indx << " stop_indx: " << stop_indx << endl;
     for (int i = start_indx; i >= stop_indx; --i)
     {
-        //cout << "deriv[i]: " << deriv[i] << " max_allowed_dev: " << max_allowed_dev << " deriv[i] < max_allowed_dev " << (deriv[i] < max_allowed_dev) << endl;
-        if (deriv[i] < max_allowed_dev /*&& fabs(signal[i] - signal[start_indx]) < max_allowed_dev * 7.0*/)
+        if (deriv[i] < max_allowed_dev)
         {
             isoel_l = i;
             break;
@@ -1420,52 +1603,16 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
 
     if (isoel_l < 0) isoel_l = 0;
 
-    min_val = 1e9, max_val = -1e9;
-    for (int i = 0; i < len; ++i)
-    {
-        if (max_val < signal[i]) max_val = signal[i];
-        if (min_val > signal[i]) min_val = signal[i];
-    }
-
-    qrs_amp = max_val - min_val;
-    double max_allowed_dev_sig = signal_baseline / 2.0;
-    int nr_samples_20_ms = 20.0 * fs / 1000.0;
-    std::vector<double> treshold(len, max_allowed_dev_sig);
-    write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&treshold, 1, len, fs);
-
-    if (isoel_l > -1 && extend_mode == 1)
-    {
-        int stopindx = isoel_l - nr_samples_20_ms;
-        if (stopindx < 0) stopindx = 0;
-        for (int i = isoel_l; i >= stopindx; --i)
-            if (fabs(signal[i] - signal_baseline) > max_allowed_dev_sig)
-                isoel_l = i;
-//        int mid = (start_indx - isoel_l) / 2 + isoel_l;
-//        if (mid >= len) mid = len - 1;
-//
-//        bool ascending = signal[isoel_l] < signal[mid];
-//
-//        for (int i = isoel_l; i < start_indx && i < len; ++i)
-//            if ((ascending && (signal[i] > signal[isoel_l] + max_allowed_dev)) || (!ascending && (signal[i] < signal[isoel_l] - max_allowed_dev)))
-//            {
-//                //isoel_l = i;
-//                break;
-//            }
-    }
-
     isoel_r = -1;
     start_indx += nr_perimeter_samples * 2 + nr_isoel_samples * 3;
     stop_indx = start_indx + nr_max_search_samples;
     if (stop_indx < 0) stop_indx = 0;
     if (stop_indx >= len) stop_indx = len - 1;
 
-    //cout << "start_indx: " << start_indx << " stop_indx: " << stop_indx << endl;
     for (int i = start_indx; i < stop_indx; ++i)
     {
-        //cout << "deriv[i]: " << deriv[i] << " max_allowed_dev: " << max_allowed_dev << " deriv[i] < max_allowed_dev " << deriv[i] << max_allowed_dev << endl;
-        if (deriv[i] < max_allowed_dev /*&& fabs(signal[i] - signal[start_indx]) < max_allowed_dev * 7.0*/)
+        if (deriv[i] < max_allowed_dev)
         {
-            //cout << i << ": fabs(signal[i]: " << fabs(signal[i]) << " max_allowed_dev: " << max_allowed_dev << endl;
             isoel_r = i;
             break;
         }
@@ -1473,27 +1620,11 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
     if (isoel_r > -1 && isoel_l == -1 && ((double)isoel_r / fs < .15))
         isoel_l = 0;
 
-    if (isoel_r > -1 && extend_mode == 1)
-    {
-        int stopindx = isoel_r + nr_samples_20_ms;
-        if (stopindx >= len) stopindx = len - 1;
-        for (int i = isoel_r; i < stopindx; ++i)
-            if (fabs(signal[i] - signal_baseline) > max_allowed_dev_sig)
-                isoel_r = i;
 
-//        int mid = (isoel_r - start_indx) / 2 + start_indx;
-//        if (mid >= len) mid = len - 1;
-//
-//        bool ascending = signal[isoel_r] < signal[mid];
-//
-//        for (int i = isoel_r; i > start_indx; --i)
-//            if ((ascending && (signal[i] > signal[isoel_r] + max_allowed_dev)) || (!ascending && (signal[i] < signal[isoel_r] - max_allowed_dev)))
-//            {
-//                //isoel_r = i;
-//                break;
-//            }
-    }
-    //cout << "isoel_l: " << isoel_l << "  isoel_r: " << isoel_r << endl;
+    if (extend_mode == 1)
+        fix_wave_bounderies(signal, signal_baseline, len, fs, 90.0, isoel_l, isoel_r);
+
+    //cout << "isoel_l: " << isoel_l / fs << "  isoel_r: " << isoel_r / fs << endl;
 
     write_binmx_to_file("c:/Tamas/test003.bin", (const double**)&deriv, 1, len, fs);
 }
@@ -1616,19 +1747,19 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs)
 
     // P1
     if (a.p[0] >= 0 && a.p[1] >= 0 && a.p[2] >= 0 &&
-        a.p[0] < a.p[1] && a.p[1] < a.p[2] && a.p[2] < len)
+            a.p[0] < a.p[1] && a.p[1] < a.p[2] && a.p[2] < len)
     {
         r.P1_DURATION  = (a.p[2] - a.p[0]) * 1000.0 / fs;
         r.P1_AMPLITUDE = signal[a.p[1]] - baseline;
     }
 
     //if (r.P1_AMPLITUDE > 10600)
-      //  cout <<"DDDDDDDDDDD" << endl;
+    //  cout <<"DDDDDDDDDDD" << endl;
     //cout << r.P1_AMPLITUDE << endl;
 
     // P2 (optional)
     if (a.p[3] >= 0 && a.p[4] >= 0 && a.p[5] >= 0 &&
-        a.p[3] < a.p[4] && a.p[4] < a.p[5] && a.p[5] < len)
+            a.p[3] < a.p[4] && a.p[4] < a.p[5] && a.p[5] < len)
     {
         r.P2_DURATION  = (a.p[5] - a.p[3]) * 1000.0 / fs;
         r.P2_AMPLITUDE = signal[a.p[4]] - baseline;
@@ -1637,7 +1768,7 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs)
     /* ================= QRS ================= */
 
     if (a.r[0] >= 0 && a.r[1] >= 0 && a.r[2] >= 0 &&
-        a.r[0] < a.r[1] && a.r[1] < a.r[2] && a.r[2] < len)
+            a.r[0] < a.r[1] && a.r[1] < a.r[2] && a.r[2] < len)
     {
         r.QRS_DURATION = (a.r[2] - a.r[0]) * 1000.0 / fs;
         r.R_DURATION   = r.QRS_DURATION;
@@ -1652,7 +1783,7 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs)
         for (int i = a.r[0]; i < a.r[1]; ++i)
         {
             if ((r_positive && signal[i] < q_ext) ||
-                (!r_positive && signal[i] > q_ext))
+                    (!r_positive && signal[i] > q_ext))
             {
                 q_ext = signal[i];
                 q_idx = i;
@@ -1674,7 +1805,7 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs)
         for (int i = a.r[1]; i < s_end; ++i)
         {
             if ((r_positive && signal[i] < s_ext) ||
-                (!r_positive && signal[i] > s_ext))
+                    (!r_positive && signal[i] > s_ext))
             {
                 s_ext = signal[i];
                 s_idx = i;
