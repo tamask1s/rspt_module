@@ -1462,6 +1462,69 @@ void fix_wave_bounderies_cz(double* signal, double base_line, int len, double fs
     bound_r = std::min(len - 1, r - padding_samples);
 }
 
+void remove_artifacts(double* signal, int N, double fs)
+{
+    if (!signal || N < 3)
+        return;
+
+    /* -------- 1. Első sample speciális kezelése -------- */
+
+    double d01 = fabs(signal[0] - signal[1]);
+    double d02 = fabs(signal[0] - signal[2]);
+    double d12 = fabs(signal[1] - signal[2]);
+
+    // Ha az első minta nagyon eltér, de a következők egymáshoz közel vannak
+    if (d01 > 5.0 * d12 && d02 > 5.0 * d12)
+    {
+        signal[0] = signal[1];
+    }
+
+    /* -------- 2. Globális statisztika -------- */
+
+    double mean = 0.0;
+    for (int i = 0; i < N; i++)
+        mean += signal[i];
+    mean /= N;
+
+    double var = 0.0;
+    for (int i = 0; i < N; i++)
+    {
+        double d = signal[i] - mean;
+        var += d * d;
+    }
+    double std = sqrt(var / N);
+
+    if (std < 1e-6)
+        return;
+
+    const double GLOBAL_TH = 4.0 * std;
+    const double LOCAL_TH  = 6.0 * std;
+
+    /* -------- 3. Többi artifact eltávolítása -------- */
+
+    for (int i = 1; i < N - 1; i++)
+    {
+        int is_artifact = 0;
+
+        if (fabs(signal[i] - mean) > GLOBAL_TH)
+            is_artifact = 1;
+
+        if (fabs(signal[i] - signal[i - 1]) > LOCAL_TH &&
+                fabs(signal[i] - signal[i + 1]) > LOCAL_TH)
+            is_artifact = 1;
+
+        if (!is_artifact)
+            continue;
+
+        signal[i] = 0.5 * (signal[i - 1] + signal[i + 1]);
+    }
+
+    /* -------- 4. Utolsó sample -------- */
+
+    if (fabs(signal[N - 1] - signal[N - 2]) > GLOBAL_TH)
+        signal[N - 1] = signal[N - 2];
+}
+
 void fix_wave_bounderies(double* signal, double base_line, int len, double fs, double radius, int& bound_l, int& bound_r)
 {
     cout << bound_l / fs << " to " << bound_r / fs << endl;
@@ -1471,7 +1534,7 @@ void fix_wave_bounderies(double* signal, double base_line, int len, double fs, d
     double bound_l_ms = bound_l * 1000.0 / fs;
     int padding_samples = 0;
     //if (bound_l_ms < 100)
-      //  padding_samples = (int)((100.0 - bound_l_ms) * fs / 1000.0);
+    //  padding_samples = (int)((100.0 - bound_l_ms) * fs / 1000.0);
 
     int N = len + padding_samples;
     std::vector<double> sig(N);
@@ -1498,7 +1561,7 @@ void fix_wave_bounderies(double* signal, double base_line, int len, double fs, d
         }
     }
 
-    cout << maxindx / fs << endl;
+    cout << "maxindx: " << maxindx << " / " << maxindx / fs << " / min_amp: " << min_amp << " max_amp: " << max_amp << endl;
 
     double base_thr = 0.02 * (max_amp - min_amp) + min_amp;
     int radius_samples = radius * fs / 1000.0;
@@ -1508,6 +1571,7 @@ void fix_wave_bounderies(double* signal, double base_line, int len, double fs, d
     if (stop >= len) stop = len;
     bound_l = start;
     bound_r = stop;
+    cout << "radius_samples: " << radius_samples << " bound_l: " << bound_l << " bound_r: " << bound_r << " / " << bound_r / fs<< endl;
     int offcount = 0;
     for (int i = start; i < stop; ++i)
     {
@@ -1519,26 +1583,40 @@ void fix_wave_bounderies(double* signal, double base_line, int len, double fs, d
         else
             offcount++;
         if (offcount == 4)
+        {
+            bound_r = i - 4;
             break;
+        }
     }
+    offcount = 0;
     for (int i = stop; i >= start; --i)
     {
         if (sig[i] < base_thr)
         {
+            cout << ".";
             offcount = 0;
             bound_r = i;
         }
         else
+        {
+            cout << "x";
             offcount++;
+        }
         if (offcount == 4)
+        {
+            cout << "DDDDDDDDD";
+            bound_r = i + 4;
             break;
+        }
     }
     bound_l -= padding_samples;
     bound_r -= padding_samples;
+    cout << "base_thr: " << base_thr << " bound_l: " << bound_l << " bound_r: " << bound_l << endl;
 }
 
 void search_isoel_bounds(double* signal, int len, double fs, int start_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1)
 {
+    remove_artifacts(signal, len, fs);
     //cout << endl << "------------------------------------------------------------" << endl;
     if (!signal || len <= 0)
         return;
@@ -1622,7 +1700,7 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
 
 
     if (extend_mode == 1)
-        fix_wave_bounderies(signal, signal_baseline, len, fs, 90.0, isoel_l, isoel_r);
+        fix_wave_bounderies(signal, signal_baseline, len, fs, 80.0, isoel_l, isoel_r);
 
     //cout << "isoel_l: " << isoel_l / fs << "  isoel_r: " << isoel_r / fs << endl;
 
