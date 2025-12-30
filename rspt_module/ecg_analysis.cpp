@@ -1563,7 +1563,7 @@ void fix_wave_bounderies(double* signal, double base_line, int len, double fs, d
 
     cout << "maxindx: " << maxindx << " / " << maxindx / fs << " / min_amp: " << min_amp << " max_amp: " << max_amp << endl;
 
-    double base_thr = 0.02 * (max_amp - min_amp) + min_amp;
+    double base_thr = 0.01 * (max_amp - min_amp) + min_amp;
     int radius_samples = radius * fs / 1000.0;
     int start = maxindx - radius_samples;
     if (start < 0) start = 0;
@@ -1669,6 +1669,9 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
     double signal_baseline = median(&signal[0], len);
     double max_allowed_dev = deriv_baseline + qrs_amp * isoel_tolerance;
 
+    vector<double> baselinev(len, deriv_baseline);
+    write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&baselinev, 1, len, fs);
+
     isoel_l = -1;
     for (int i = start_indx; i >= stop_indx; --i)
     {
@@ -1697,7 +1700,6 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
     }
     if (isoel_r > -1 && isoel_l == -1 && ((double)isoel_r / fs < .15))
         isoel_l = 0;
-
 
     if (extend_mode == 1)
         fix_wave_bounderies(signal, signal_baseline, len, fs, 80.0, isoel_l, isoel_r);
@@ -1985,7 +1987,8 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, 300, 300, isoel_start, isoel_r, peak_p, peak_t);
 
     int isoel_p_l = -1, isoel_p_r = -1;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p, 170, 4, 35, isoel_p_l, isoel_p_r, 0.005);
+    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p, 100, 3, 35, isoel_p_l, isoel_p_r, 0.005);
+         //double* signal, int len, double fs, int start_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1)
 
     int isoel_t_l = -1, isoel_t_r = -1;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_t, 220, 4, 35, isoel_t_l, isoel_t_r, 0.02);
@@ -2007,28 +2010,28 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     annotations[0].t[2] = isoel_t_r;
 
     result.result = fill_results(lead_cpy, nr_samples_per_ch, annotations[0], sampling_rate);
-
-    cout << "----------------------------- " << endl;
-    cout << "P1_DURATION: " << result.result.P1_DURATION << endl;
-    cout << "P1_AMPLITUDE: " << result.result.P1_AMPLITUDE << endl;
-    cout << "P2_DURATION: " << result.result.P2_DURATION << endl;
-    cout << "P2_AMPLITUDE: " << result.result.P2_AMPLITUDE << endl;
-
-    cout << "Q_DURATION: " << result.result.Q_DURATION << endl;
-    cout << "Q_AMPLITUDE: " << result.result.Q_AMPLITUDE << endl;
-    cout << "R_DURATION: " << result.result.R_DURATION << endl;
-    cout << "R_AMPLITUDE: " << result.result.R_AMPLITUDE << endl;
-    cout << "S_DURATION: " << result.result.S_DURATION << endl;
-    cout << "S_AMPLITUDE: " << result.result.S_AMPLITUDE << endl;
-
-    cout << "QRS_DURATION: " << result.result.QRS_DURATION << endl;
-
-    cout << "J_AMPLITUDE: " << result.result.J_AMPLITUDE << endl;
-    cout << "ST_20_AMPLITUDE: " << result.result.ST_20_AMPLITUDE << endl;
-    cout << "ST_40_AMPLITUDE: " << result.result.ST_40_AMPLITUDE << endl;
-    cout << "ST_60_AMPLITUDE: " << result.result.ST_60_AMPLITUDE << endl;
-    cout << "ST_80_AMPLITUDE: " << result.result.ST_80_AMPLITUDE << endl;
-    cout << "T_AMPLITUDE: " << result.result.T_AMPLITUDE << endl;
+//
+//    cout << "----------------------------- " << endl;
+//    cout << "P1_DURATION: " << result.result.P1_DURATION << endl;
+//    cout << "P1_AMPLITUDE: " << result.result.P1_AMPLITUDE << endl;
+//    cout << "P2_DURATION: " << result.result.P2_DURATION << endl;
+//    cout << "P2_AMPLITUDE: " << result.result.P2_AMPLITUDE << endl;
+//
+//    cout << "Q_DURATION: " << result.result.Q_DURATION << endl;
+//    cout << "Q_AMPLITUDE: " << result.result.Q_AMPLITUDE << endl;
+//    cout << "R_DURATION: " << result.result.R_DURATION << endl;
+//    cout << "R_AMPLITUDE: " << result.result.R_AMPLITUDE << endl;
+//    cout << "S_DURATION: " << result.result.S_DURATION << endl;
+//    cout << "S_AMPLITUDE: " << result.result.S_AMPLITUDE << endl;
+//
+//    cout << "QRS_DURATION: " << result.result.QRS_DURATION << endl;
+//
+//    cout << "J_AMPLITUDE: " << result.result.J_AMPLITUDE << endl;
+//    cout << "ST_20_AMPLITUDE: " << result.result.ST_20_AMPLITUDE << endl;
+//    cout << "ST_40_AMPLITUDE: " << result.result.ST_40_AMPLITUDE << endl;
+//    cout << "ST_60_AMPLITUDE: " << result.result.ST_60_AMPLITUDE << endl;
+//    cout << "ST_80_AMPLITUDE: " << result.result.ST_80_AMPLITUDE << endl;
+//    cout << "T_AMPLITUDE: " << result.result.T_AMPLITUDE << endl;
 
 
     //cout << "isoel_start: " << isoel_start / 500.0 << " isoel_r: " << isoel_r / 500.0 << endl;
