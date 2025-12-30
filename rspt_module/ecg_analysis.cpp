@@ -1616,7 +1616,6 @@ void fix_wave_bounderies(double* signal, double base_line, int len, double fs, d
 
 void search_isoel_bounds(double* signal, int len, double fs, int start_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1)
 {
-    remove_artifacts(signal, len, fs);
     //cout << endl << "------------------------------------------------------------" << endl;
     if (!signal || len <= 0)
         return;
@@ -1975,6 +1974,7 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
             lead_cpy[i] = ecg_signal[ch][i];
     }
 
+    remove_artifacts(lead_cpy, nr_samples_per_ch, sampling_rate);
     write_binmx_to_file("c:/Tamas/test001.bin", (const double**)&lead_cpy, 1, nr_samples_per_ch, sampling_rate);
 //    std::sort(lead_cpy, lead_cpy + nr_samples_per_ch);
 //    for (unsigned int i = 0; i < nr_samples_per_ch; i++)
