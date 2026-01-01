@@ -25,7 +25,7 @@ struct ch_result
 
 struct ecg_analysis_result
 {
-    ch_result result;
+    struct ch_result result;
     double heart_rate_bpm;
     double rr_interval_ms;
     double rr_variation_ms;
