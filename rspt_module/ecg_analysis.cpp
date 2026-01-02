@@ -1531,7 +1531,7 @@ void fix_wave_bounderies(double* signal, double base_line, int len, double fs, d
     // =========================================================
     // 1. BAL OLDALI PADDING – VÁLTOZATLAN
     // =========================================================
-    double bound_l_ms = bound_l * 1000.0 / fs;
+    //double bound_l_ms = bound_l * 1000.0 / fs;
     int padding_samples = 0;
     //if (bound_l_ms < 100)
     //  padding_samples = (int)((100.0 - bound_l_ms) * fs / 1000.0);
@@ -1614,8 +1614,31 @@ void fix_wave_bounderies(double* signal, double base_line, int len, double fs, d
     cout << "base_thr: " << base_thr << " bound_l: " << bound_l << " bound_r: " << bound_l << endl;
 }
 
-void search_isoel_bounds(double* signal, int len, double fs, int start_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1)
+void calc_deriv(double* signal, double* deriv, int len, double dt, double fs)
 {
+    int nr_isoel_samples = dt * fs / 1000.0;
+    for (int i = 0; i < len; ++i)
+    {
+        for (int j = 0; j < nr_isoel_samples; ++j)
+            deriv[i] += fabs(signal[clamp(i + j, len)] - signal[clamp(i + j + nr_isoel_samples, len)]);
+        for (int j = 0; j < nr_isoel_samples; ++j)
+            deriv[i] += fabs(signal[clamp(i - j, len)] - signal[clamp(i - j - nr_isoel_samples, len)]);
+    }
+
+    int nr_isoel_samples_m = nr_isoel_samples * 3;
+
+    for (int i = 0; i < len; ++i)
+    {
+        for (int j = 0; j < nr_isoel_samples_m; ++j)
+            deriv[i] += fabs(signal[clamp(i + j, len)] - signal[clamp(i + j + nr_isoel_samples_m, len)]);
+        for (int j = 0; j < nr_isoel_samples_m; ++j)
+            deriv[i] += fabs(signal[clamp(i - j, len)] - signal[clamp(i - j - nr_isoel_samples_m, len)]);
+    }
+}
+
+void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1, int a_stop_indx_r = -1)
+{
+    //cout << "peak_indx: " << peak_indx << " stop_indx: " << stop_indx << " max_val: " << max_val << " min_val: " << min_val << endl;
     //cout << endl << "------------------------------------------------------------" << endl;
     if (!signal || len <= 0)
         return;
@@ -1627,14 +1650,19 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
     if (nr_isoel_samples <= 0 || nr_max_search_samples <= 0)
         return;
 
-    start_indx -= nr_perimeter_samples + nr_isoel_samples * 3;
+    double peak_indx_l = peak_indx - nr_perimeter_samples;
+    if (peak_indx_l >= len) peak_indx_l = len - 1;
+    if (peak_indx_l < 0) peak_indx_l = 0;
+    int stop_indx_l = peak_indx - nr_max_search_samples;
+    if (stop_indx_l < 0) stop_indx_l = 0;
+    if (stop_indx_l >= len) stop_indx_l = len - 1;
 
-    if (start_indx >= len) start_indx = len - 1;
-    if (start_indx < 0) start_indx = 0;
-
-    int stop_indx = start_indx - nr_max_search_samples;
-    if (stop_indx < 0) stop_indx = 0;
-    if (stop_indx >= len) stop_indx = len - 1;
+    double peak_indx_r = peak_indx + nr_perimeter_samples;
+    int stop_indx_r = a_stop_indx_r;
+    if (stop_indx_r == -1)
+        stop_indx_r = peak_indx + nr_max_search_samples;
+    if (stop_indx_r < 0) stop_indx_r = 0;
+    if (stop_indx_r >= len) stop_indx_r = len - 1;
 
     std::vector<double> deriv(len, 0.0);
 
@@ -1657,26 +1685,32 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
     }
 
     double min_val = 1e9, max_val = -1e9;
-    for (int i = 0; i < len; ++i)
+    for (int i = stop_indx_l; i < stop_indx_r; ++i)
     {
         if (max_val < deriv[i]) max_val = deriv[i];
         if (min_val > deriv[i]) min_val = deriv[i];
     }
 
     double qrs_amp = max_val - min_val;
-    double deriv_baseline = median(&deriv[0], len);
+    //cout << "peak_indx: " << peak_indx << " qrs_amp: " << qrs_amp << " max_val: " << max_val << " min_val:" << min_val << " stop_indx_r: " << stop_indx_r << endl;
+    //double deriv_baseline = median(&deriv[0], len);
     double signal_baseline = median(&signal[0], len);
-    double max_allowed_dev = deriv_baseline + qrs_amp * isoel_tolerance;
+    double max_allowed_dev = /*deriv_baseline + */ min_val + qrs_amp * isoel_tolerance;
 
-    vector<double> baselinev(len, deriv_baseline);
+    vector<double> baselinev(len, max_allowed_dev);
     write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&baselinev, 1, len, fs);
 
     isoel_l = -1;
-    for (int i = start_indx; i >= stop_indx; --i)
+    //cout << "XXXX stop_indx_l: " << stop_indx_l << endl;
+    for (int i = peak_indx_l; i >= stop_indx_l; --i)
     {
+        //if (extend_mode == 1)
+            //cout << "peak_indx_l: " << peak_indx_l << " i: " << i << " max_allowed_dev: " << max_allowed_dev << " deriv[i]: " << deriv[i] << endl;
+
         if (deriv[i] < max_allowed_dev)
         {
             isoel_l = i;
+            //cout << "i: " << i << " max_allowed_dev: " << max_allowed_dev << " deriv[i]: " << deriv[i] << endl;
             break;
         }
     }
@@ -1684,24 +1718,20 @@ void search_isoel_bounds(double* signal, int len, double fs, int start_indx, dou
     if (isoel_l < 0) isoel_l = 0;
 
     isoel_r = -1;
-    start_indx += nr_perimeter_samples * 2 + nr_isoel_samples * 3;
-    stop_indx = start_indx + nr_max_search_samples;
-    if (stop_indx < 0) stop_indx = 0;
-    if (stop_indx >= len) stop_indx = len - 1;
 
-    for (int i = start_indx; i < stop_indx; ++i)
+    for (int i = peak_indx_r; i < stop_indx_r; ++i)
     {
         if (deriv[i] < max_allowed_dev)
         {
             isoel_r = i;
+            // if (extend_mode == 1)
+            //   cout << "peak_indx_r: " << peak_indx_r << " i: " << i << " max_allowed_dev: " << max_allowed_dev << " deriv[i]: " << deriv[i] << endl;
             break;
         }
     }
-    if (isoel_r > -1 && isoel_l == -1 && ((double)isoel_r / fs < .15))
-        isoel_l = 0;
 
-    if (extend_mode == 1)
-        fix_wave_bounderies(signal, signal_baseline, len, fs, 80.0, isoel_l, isoel_r);
+    //if (extend_mode == 1)
+    //   fix_wave_bounderies(signal, signal_baseline, len, fs, 80.0, isoel_l, isoel_r);
 
     //cout << "isoel_l: " << isoel_l / fs << "  isoel_r: " << isoel_r / fs << endl;
 
@@ -1957,13 +1987,19 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
 
     unsigned int ch = analysis_ch_indx;
     double* lead_cpy = new double[nr_samples_per_ch];
-    if (false)
+    if (true)
     {
-        iir_filter_2nd_order bandpass_filter_;
-        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 1, sampling_rate, 0.3, 47);
+        iir_filter_4th_order bandpass_filter_;
+        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 2, sampling_rate, 0.3, 47);
         bandpass_filter_.init_history_values(ecg_signal[ch][0], sampling_rate);
         for (unsigned int i = 0; i < nr_samples_per_ch; i++)
             lead_cpy[i] = bandpass_filter_.filter(ecg_signal[ch][i]);
+        bandpass_filter_.init_history_values(lead_cpy[nr_samples_per_ch - 1], sampling_rate);
+        for (int i = nr_samples_per_ch - 1; i >= 0; i--)
+            lead_cpy[i] = bandpass_filter_.filter(lead_cpy[i]);
+        bandpass_filter_.init_history_values(lead_cpy[0], sampling_rate);
+        for (unsigned int i = 0; i < nr_samples_per_ch; i++)
+            lead_cpy[i] = bandpass_filter_.filter(lead_cpy[i]);
         bandpass_filter_.init_history_values(lead_cpy[nr_samples_per_ch - 1], sampling_rate);
         for (int i = nr_samples_per_ch - 1; i >= 0; i--)
             lead_cpy[i] = bandpass_filter_.filter(lead_cpy[i]);
@@ -1982,16 +2018,17 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
 //    write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&lead_cpy, 1, nr_samples_per_ch, sampling_rate);
 
     int isoel_start = -1, isoel_r = -1;
+    int samples_10ms = 10.0 * sampling_rate / 1000.0;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_indexes[0], 110, 2, 35, isoel_start, isoel_r, 0.05, 0);
     int peak_p, peak_t;
     search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, 300, 300, isoel_start, isoel_r, peak_p, peak_t);
 
     int isoel_p_l = -1, isoel_p_r = -1;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p, 100, 3, 35, isoel_p_l, isoel_p_r, 0.005);
-         //double* signal, int len, double fs, int start_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1)
+    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p, 200, 4, 10, isoel_p_l, isoel_p_r, 0.2, 1, isoel_start - samples_10ms);
+    //double* signal, int len, double fs, int start_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1)
 
     int isoel_t_l = -1, isoel_t_r = -1;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_t, 220, 4, 35, isoel_t_l, isoel_t_r, 0.02);
+    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_t, 200, 4, 35, isoel_t_l, isoel_t_r, 0.1, 1);
 
     //cout << "peak_p: " << peak_p / 500.0 << " peak_t: " << peak_t / 500.0 << endl;
     //cout << "isoel_p_l: " << isoel_p_l << "isoel_p_r: " << isoel_p_r << endl;
