@@ -1637,6 +1637,17 @@ void calc_deriv(double* signal, double* deriv, int len, double dt, double dt_mul
     }
 }
 
+inline void min_max(const double* arr, int len, double& min_val, double& max_val)
+{
+    min_val = 1e9;
+    max_val = -1e9;
+    for (int i = 0; i < len; ++i)
+    {
+        if (arr[i] > max_val) max_val = arr[i];
+        if (arr[i] < min_val) min_val = arr[i];
+    }
+}
+
 void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1, int a_stop_indx_r = -1)
 {
     //cout << "peak_indx: " << peak_indx << " stop_indx: " << stop_indx << " max_val: " << max_val << " min_val: " << min_val << endl;
@@ -1662,10 +1673,30 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
     if (stop_indx_r >= len) stop_indx_r = len - 1;
 
     std::vector<double> deriv(len, 0.0);
-
     calc_deriv(&signal[0], &deriv[0], len, isoel_ms, 3.0, fs);
 
-    double min_val = 1e9, max_val = -1e9;
+    double min_val, max_val;
+    min_max(&deriv[0], len, min_val, max_val);
+
+    double max_allowed_dev_r = min_val + (max_val - min_val) * isoel_tolerance * 0.1;
+
+    cout << "stop_indx_r: " << stop_indx_r / fs << endl;
+    if (extend_mode == 1)
+        for (int i = stop_indx_r; i >= peak_indx_r; --i)
+            if (deriv[i] > max_allowed_dev_r)
+            {
+                cout << i / fs << " deriv[i]: " << deriv[i] << " max_allowed_dev_r: " << max_allowed_dev_r << endl;
+                --stop_indx_r;
+            }
+            else
+            {
+                cout << i / fs << " deriv[i]: " << deriv[i] << " max_allowed_dev_r: " << max_allowed_dev_r << endl;
+                cout << "M" << endl;
+                break;
+            }
+    cout << "stop_indx_r after: " << stop_indx_r / fs << endl;
+
+    min_val = 1e9; max_val = -1e9;
     for (int i = stop_indx_l; i < stop_indx_r; ++i)
     {
         if (max_val < deriv[i]) max_val = deriv[i];
@@ -1673,17 +1704,21 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
     }
 
     double qrs_amp = max_val - min_val;
-    //cout << "peak_indx: " << peak_indx << " qrs_amp: " << qrs_amp << " max_val: " << max_val << " min_val:" << min_val << " stop_indx_r: " << stop_indx_r << endl;
+    cout << "peak_indx: " << peak_indx << " qrs_amp: " << qrs_amp << " max_val: " << max_val << " min_val:" << min_val << " stop_indx_r: " << stop_indx_r << endl;
     //double deriv_baseline = median(&deriv[0], len);
     //double signal_baseline = median(&signal[0], len);
     double max_allowed_dev = /*deriv_baseline + */ min_val + qrs_amp * isoel_tolerance;
 
-    //cout << "peak_indx_l: " << peak_indx_l << " max_allowed_dev: " << max_allowed_dev << endl;
+    cout << "peak_indx_l: " << peak_indx_l << " max_allowed_dev: " << max_allowed_dev << endl;
 
     vector<double> baselinev(len, max_allowed_dev);
     write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&baselinev, 1, len, fs);
 
     isoel_l = -1;
+    double max_allowed_dev_orig = max_allowed_dev;
+    int safetycount = 0;
+
+repeat_l:
     //cout << "XXXX stop_indx_l: " << stop_indx_l << endl;
     for (int i = peak_indx_l; i >= stop_indx_l; --i)
     {
@@ -1698,10 +1733,18 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
         }
     }
 
-    if (isoel_l < 0) isoel_l = 0;
+    if (isoel_l == -1 && safetycount++ < 100)
+    {
+        max_allowed_dev *= 1.1;
+        goto repeat_l;
+    }
+
+    max_allowed_dev = max_allowed_dev_orig;
+    safetycount = 0;
 
     isoel_r = -1;
 
+repeat_r:
     for (int i = peak_indx_r; i < stop_indx_r; ++i)
     {
         if (deriv[i] < max_allowed_dev)
@@ -1712,11 +1755,22 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
             break;
         }
     }
+    if (isoel_r == -1 && safetycount++ < 100)
+    {
+        max_allowed_dev *= 1.1;
+        goto repeat_r;
+    }
 
     //if (extend_mode == 1)
     //   fix_wave_bounderies(signal, signal_baseline, len, fs, 80.0, isoel_l, isoel_r);
+//    if (peak_indx - isoel_l < (isoel_r - peak_indx) / 2)
+//        isoel_l = peak_indx - (isoel_r - peak_indx);
+//    if (peak_indx - isoel_l > (isoel_r - peak_indx))
+//        isoel_l = peak_indx - (isoel_r - peak_indx);
+//    if (isoel_l < 0)
+//        isoel_l = 0;
 
-    //cout << "isoel_l: " << isoel_l / fs << "  isoel_r: " << isoel_r / fs << endl;
+    cout << "isoel_l: " << isoel_l / fs << "  isoel_r: " << isoel_r / fs << endl;
 
     write_binmx_to_file("c:/Tamas/test003.bin", (const double**)&deriv, 1, len, fs);
 }
@@ -2001,17 +2055,17 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
 //    write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&lead_cpy, 1, nr_samples_per_ch, sampling_rate);
 
     int isoel_start = -1, isoel_r = -1;
-    int samples_10ms = 15.0 * sampling_rate / 1000.0;
+    int samples_10ms = 0.0 * sampling_rate / 1000.0;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_indexes[0], 110, 2, 35, isoel_start, isoel_r, 0.05, 0);
     int peak_p, peak_t;
-    search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, 300, 300, isoel_start, isoel_r, peak_p, peak_t);
+    search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, 250, 300, isoel_start, isoel_r, peak_p, peak_t);
 
     int isoel_p_l = -1, isoel_p_r = -1;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p, 200, 4, 10, isoel_p_l, isoel_p_r, 0.27, 1, isoel_start - samples_10ms);
     //double* signal, int len, double fs, int start_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1)
 
     int isoel_t_l = -1, isoel_t_r = -1;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_t, 200, 4, 35, isoel_t_l, isoel_t_r, 0.1, 1);
+    //search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_t, 200, 4, 35, isoel_t_l, isoel_t_r, 0.1, 1);
 
     //cout << "peak_p: " << peak_p / 500.0 << " peak_t: " << peak_t / 500.0 << endl;
     //cout << "isoel_p_l: " << isoel_p_l << "isoel_p_r: " << isoel_p_r << endl;
@@ -2031,27 +2085,27 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
 
     result.result = fill_results(lead_cpy, nr_samples_per_ch, annotations[0], sampling_rate);
 
-//    cout << "----------------------------- " << endl;
-//    cout << "P1_DURATION: " << result.result.P1_DURATION << endl;
-//    cout << "P1_AMPLITUDE: " << result.result.P1_AMPLITUDE << endl;
-//    cout << "P2_DURATION: " << result.result.P2_DURATION << endl;
-//    cout << "P2_AMPLITUDE: " << result.result.P2_AMPLITUDE << endl;
-//
-//    cout << "Q_DURATION: " << result.result.Q_DURATION << endl;
-//    cout << "Q_AMPLITUDE: " << result.result.Q_AMPLITUDE << endl;
-//    cout << "R_DURATION: " << result.result.R_DURATION << endl;
-//    cout << "R_AMPLITUDE: " << result.result.R_AMPLITUDE << endl;
-//    cout << "S_DURATION: " << result.result.S_DURATION << endl;
-//    cout << "S_AMPLITUDE: " << result.result.S_AMPLITUDE << endl;
-//
-//    cout << "QRS_DURATION: " << result.result.QRS_DURATION << endl;
-//
-//    cout << "J_AMPLITUDE: " << result.result.J_AMPLITUDE << endl;
-//    cout << "ST_20_AMPLITUDE: " << result.result.ST_20_AMPLITUDE << endl;
-//    cout << "ST_40_AMPLITUDE: " << result.result.ST_40_AMPLITUDE << endl;
-//    cout << "ST_60_AMPLITUDE: " << result.result.ST_60_AMPLITUDE << endl;
-//    cout << "ST_80_AMPLITUDE: " << result.result.ST_80_AMPLITUDE << endl;
-//    cout << "T_AMPLITUDE: " << result.result.T_AMPLITUDE << endl;
+    cout << "----------------------------- " << endl;
+    cout << "P1_DURATION: " << result.result.P1_DURATION << endl;
+    cout << "P1_AMPLITUDE: " << result.result.P1_AMPLITUDE << endl;
+    cout << "P2_DURATION: " << result.result.P2_DURATION << endl;
+    cout << "P2_AMPLITUDE: " << result.result.P2_AMPLITUDE << endl;
+
+    cout << "Q_DURATION: " << result.result.Q_DURATION << endl;
+    cout << "Q_AMPLITUDE: " << result.result.Q_AMPLITUDE << endl;
+    cout << "R_DURATION: " << result.result.R_DURATION << endl;
+    cout << "R_AMPLITUDE: " << result.result.R_AMPLITUDE << endl;
+    cout << "S_DURATION: " << result.result.S_DURATION << endl;
+    cout << "S_AMPLITUDE: " << result.result.S_AMPLITUDE << endl;
+
+    cout << "QRS_DURATION: " << result.result.QRS_DURATION << endl;
+
+    cout << "J_AMPLITUDE: " << result.result.J_AMPLITUDE << endl;
+    cout << "ST_20_AMPLITUDE: " << result.result.ST_20_AMPLITUDE << endl;
+    cout << "ST_40_AMPLITUDE: " << result.result.ST_40_AMPLITUDE << endl;
+    cout << "ST_60_AMPLITUDE: " << result.result.ST_60_AMPLITUDE << endl;
+    cout << "ST_80_AMPLITUDE: " << result.result.ST_80_AMPLITUDE << endl;
+    cout << "T_AMPLITUDE: " << result.result.T_AMPLITUDE << endl;
 
 
     //cout << "isoel_start: " << isoel_start / 500.0 << " isoel_r: " << isoel_r / 500.0 << endl;
