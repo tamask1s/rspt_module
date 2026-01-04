@@ -1680,10 +1680,13 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
 
     double max_allowed_dev_r = min_val + (max_val - min_val) * isoel_tolerance * 0.1;
 
-    cout << "stop_indx_r: " << stop_indx_r / fs << endl;
+    cout << "AAAAAAAAA stop_indx_r: " << stop_indx_r / fs << " peak_indx_r: " << peak_indx_r / fs << endl;
+
     if (extend_mode == 1)
+    {
+        int samples_10ms = 4.0 * fs / 1000.0;
         for (int i = stop_indx_r; i >= peak_indx_r; --i)
-            if (deriv[i] > max_allowed_dev_r)
+            if (deriv[i] > max_allowed_dev_r && deriv[i] < deriv[i + samples_10ms])
             {
                 cout << i / fs << " deriv[i]: " << deriv[i] << " max_allowed_dev_r: " << max_allowed_dev_r << endl;
                 --stop_indx_r;
@@ -1694,6 +1697,8 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
                 cout << "M" << endl;
                 break;
             }
+        stop_indx_r -= samples_10ms;
+    }
     cout << "stop_indx_r after: " << stop_indx_r / fs << endl;
 
     min_val = 1e9; max_val = -1e9;
@@ -1777,6 +1782,7 @@ repeat_r:
 
 void search_p_and_t_peaks(double* signal, /*double* deriv, */int len, double fs, double max_search_ms_l, double max_search_ms_r, int isoel_l, int isoel_r, /*double max_allowed_dev, */int& peak_p, int& peak_t)
 {
+    cout << "UUUUUUUU max_search_ms_l: " << max_search_ms_l << " max_search_ms_r: " << max_search_ms_r << " isoel_l: " << isoel_l << " isoel_r: " << isoel_r << endl;
     int nr_max_search_samples_l = max_search_ms_l * fs / 1000.0;
     int searc_stop_l = isoel_l - nr_max_search_samples_l;
     if (searc_stop_l < 0) searc_stop_l = 0;
@@ -1785,6 +1791,18 @@ void search_p_and_t_peaks(double* signal, /*double* deriv, */int len, double fs,
     peak_p = -1;
     //cout << "XXXXXX  isoel_l " << isoel_l / 500.0 << " searc_stop_l " << searc_stop_l / 500.0 << endl;
     double base = signal[isoel_l];
+    cout << "BASE " << base << endl;
+    for (int i = isoel_l - 1; i >= searc_stop_l; --i)
+        if (base > signal[i])
+        {
+            base = signal[i];
+            --isoel_l;
+        }
+        else
+            break;
+    cout << "BASE " << base << endl;
+    if (isoel_l < 0) isoel_l = 0;
+
     for (int i = isoel_l; i >= searc_stop_l; --i)
     {
         //cout << i << ": " << maxval << " / " << fabs(signal[i] - base) << endl;
@@ -1795,9 +1813,10 @@ void search_p_and_t_peaks(double* signal, /*double* deriv, */int len, double fs,
         }
     }
 
+    cout << "peak_p: " << peak_p / fs << endl;
+
     int nr_max_search_samples_r = max_search_ms_r * fs / 1000.0;
     int searc_stop_r = nr_max_search_samples_r + isoel_r;
-    if (isoel_l < 0) isoel_l = 0;
     if (searc_stop_r >= len) searc_stop_r = len - 1;
     maxval = -1e9;
     peak_t = -1;
