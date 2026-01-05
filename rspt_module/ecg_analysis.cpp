@@ -1617,7 +1617,7 @@ inline int clamp(int i, int len)
 void calc_deriv(double* signal, double* deriv, int len, double dt, double dt_multiplier, double fs)
 {
     int step = fs / 500.0;
-    int nr_dt_samples = 1 * dt * fs / 1000.0;
+    int nr_dt_samples = dt * fs / 1000.0;
     for (int i = 0; i < len; ++i)
     {
         for (int j = 0; j < nr_dt_samples; j += step)
@@ -1791,16 +1791,16 @@ void search_p_and_t_peaks(double* signal, /*double* deriv, */int len, double fs,
     peak_p = -1;
     //cout << "XXXXXX  isoel_l " << isoel_l / 500.0 << " searc_stop_l " << searc_stop_l / 500.0 << endl;
     double base = signal[isoel_l];
-    cout << "BASE " << base << endl;
-    for (int i = isoel_l - 1; i >= searc_stop_l; --i)
-        if (base > signal[i])
-        {
-            base = signal[i];
-            --isoel_l;
-        }
-        else
-            break;
-    cout << "BASE " << base << endl;
+//    cout << "BASE " << base << endl;
+//    for (int i = isoel_l - 1; i >= searc_stop_l; --i)
+//        if (base > signal[i])
+//        {
+//            base = signal[i];
+//            --isoel_l;
+//        }
+//        else
+//            break;
+//    cout << "BASE " << base << endl;
     if (isoel_l < 0) isoel_l = 0;
 
     for (int i = isoel_l; i >= searc_stop_l; --i)
@@ -2046,7 +2046,7 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     if (true)
     {
         iir_filter_4th_order bandpass_filter_;
-        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 2, sampling_rate, 0.3, 27);
+        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 2, sampling_rate, 0.1, 33);
         bandpass_filter_.init_history_values(ecg_signal[ch][0], sampling_rate);
         for (unsigned int i = 0; i < nr_samples_per_ch; i++)
             lead_cpy[i] = bandpass_filter_.filter(ecg_signal[ch][i]);
@@ -2059,6 +2059,12 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
         bandpass_filter_.init_history_values(lead_cpy[nr_samples_per_ch - 1], sampling_rate);
         for (int i = nr_samples_per_ch - 1; i >= 0; i--)
             lead_cpy[i] = bandpass_filter_.filter(lead_cpy[i]);
+//        bandpass_filter_.init_history_values(lead_cpy[0], sampling_rate);
+//        for (unsigned int i = 0; i < nr_samples_per_ch; i++)
+//            lead_cpy[i] = bandpass_filter_.filter(lead_cpy[i]);
+//        bandpass_filter_.init_history_values(lead_cpy[nr_samples_per_ch - 1], sampling_rate);
+//        for (int i = nr_samples_per_ch - 1; i >= 0; i--)
+//            lead_cpy[i] = bandpass_filter_.filter(lead_cpy[i]);
     }
     else
     {
