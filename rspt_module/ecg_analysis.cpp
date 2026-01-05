@@ -1617,7 +1617,7 @@ inline int clamp(int i, int len)
 void calc_deriv(double* signal, double* deriv, int len, double dt, double dt_multiplier, double fs)
 {
     int step = fs / 500.0;
-    int nr_dt_samples = dt * fs / 1000.0;
+    int nr_dt_samples = 1 * dt * fs / 1000.0;
     for (int i = 0; i < len; ++i)
     {
         for (int j = 0; j < nr_dt_samples; j += step)
@@ -1673,7 +1673,7 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
     if (stop_indx_r >= len) stop_indx_r = len - 1;
 
     std::vector<double> deriv(len, 0.0);
-    calc_deriv(&signal[0], &deriv[0], len, isoel_ms, 3.0, fs);
+    calc_deriv(&signal[0], &deriv[0], len, isoel_ms, 4, fs);
 
     double min_val, max_val;
     min_max(&deriv[0], len, min_val, max_val);
@@ -1684,7 +1684,7 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
 
     if (extend_mode == 1)
     {
-        int samples_10ms = 4.0 * fs / 1000.0;
+        int samples_10ms = 6.0 * fs / 1000.0;
         for (int i = stop_indx_r; i >= peak_indx_r; --i)
             if (deriv[i] > max_allowed_dev_r && deriv[i] < deriv[i + samples_10ms])
             {
@@ -1693,11 +1693,11 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
             }
             else
             {
-                cout << i / fs << " deriv[i]: " << deriv[i] << " max_allowed_dev_r: " << max_allowed_dev_r << endl;
+                cout << i / fs << " deriv[i]: " << deriv[i] << " deriv[i + x]" << deriv[i + samples_10ms] << " max_allowed_dev_r: " << max_allowed_dev_r << " samples_10ms: " << samples_10ms << endl;
                 cout << "M" << endl;
                 break;
             }
-        stop_indx_r -= samples_10ms;
+        stop_indx_r -= samples_10ms * 2.0;
     }
     cout << "stop_indx_r after: " << stop_indx_r / fs << endl;
 
@@ -1740,7 +1740,7 @@ repeat_l:
 
     if (isoel_l == -1 && safetycount++ < 100)
     {
-        max_allowed_dev *= 1.1;
+        max_allowed_dev *= 1.01;
         goto repeat_l;
     }
 
@@ -1762,7 +1762,7 @@ repeat_r:
     }
     if (isoel_r == -1 && safetycount++ < 100)
     {
-        max_allowed_dev *= 1.1;
+        max_allowed_dev *= 1.01;
         goto repeat_r;
     }
 
@@ -2046,7 +2046,7 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     if (true)
     {
         iir_filter_4th_order bandpass_filter_;
-        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 2, sampling_rate, 0.3, 47);
+        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 2, sampling_rate, 0.3, 27);
         bandpass_filter_.init_history_values(ecg_signal[ch][0], sampling_rate);
         for (unsigned int i = 0; i < nr_samples_per_ch; i++)
             lead_cpy[i] = bandpass_filter_.filter(ecg_signal[ch][i]);
@@ -2073,6 +2073,8 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
 //        lead_cpy[i] = lead_cpy[nr_samples_per_ch / 2];
 //    write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&lead_cpy, 1, nr_samples_per_ch, sampling_rate);
 
+    cout << "----------------------------- " << endl;
+
     int isoel_start = -1, isoel_r = -1;
     int samples_10ms = 0.0 * sampling_rate / 1000.0;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_indexes[0], 110, 2, 35, isoel_start, isoel_r, 0.05, 0);
@@ -2080,7 +2082,7 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, 250, 300, isoel_start, isoel_r, peak_p, peak_t);
 
     int isoel_p_l = -1, isoel_p_r = -1;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p, 200, 4, 10, isoel_p_l, isoel_p_r, 0.27, 1, isoel_start - samples_10ms);
+    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p, 200, /**dt*/2, /**primeter*/30, isoel_p_l, isoel_p_r, 0.2, 1, isoel_start - samples_10ms);
     //double* signal, int len, double fs, int start_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1)
 
     int isoel_t_l = -1, isoel_t_r = -1;
@@ -2104,7 +2106,6 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
 
     result.result = fill_results(lead_cpy, nr_samples_per_ch, annotations[0], sampling_rate);
 
-    cout << "----------------------------- " << endl;
     cout << "P1_DURATION: " << result.result.P1_DURATION << endl;
     cout << "P1_AMPLITUDE: " << result.result.P1_AMPLITUDE << endl;
     cout << "P2_DURATION: " << result.result.P2_DURATION << endl;
