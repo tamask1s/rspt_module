@@ -1825,7 +1825,7 @@ void search_p_and_t_peaks(double* signal, /*double* deriv, */int len, double fs,
         }
     }
 
-    cout << "peak_p: " << peak_p1 / fs << endl;
+    //cout << "peak_p: " << peak_p1 / fs << endl;
 
     int nr_max_search_samples_r = max_search_ms_r * fs / 1000.0;
     int searc_stop_r = nr_max_search_samples_r + isoel_r;
@@ -1928,7 +1928,7 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs)
     {
         r.P1_DURATION  = (a.p[2] - a.p[0]) * 1000.0 / fs;
         r.P1_AMPLITUDE = signal[a.p[1]] - baseline;
-        cout << "baseline: " << baseline << " signal[a.p[1]]: " << signal[a.p[1]] << endl;
+        //cout << "baseline: " << baseline << " signal[a.p[1]]: " << signal[a.p[1]] << endl;
     }
 
     //if (r.P1_AMPLITUDE > 10600)
@@ -1942,12 +1942,6 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs)
         r.P2_DURATION  = (a.p[5] - a.p[3]) * 1000.0 / fs;
         r.P2_AMPLITUDE = signal[a.p[4]] - baseline;
     }
-
-
-//    for (int i = a.p[0]; i <= a.p[2]; ++i)
-//    {
-//
-//    }
 
     /* ================= QRS ================= */
 
@@ -2022,11 +2016,6 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs)
         r.T_AMPLITUDE = signal[a.t[1]] - baseline;
 
     return r;
-}
-
-void get_p_values(const double* signal, int on, int off, int& peak1, int& peak2, double& amp1, double& amp2)
-{
-
 }
 
 void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, ecg_analysis_result& result, unsigned int analysis_ch_indx = 0)
@@ -2107,13 +2096,12 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
 
     int isoel_start = -1, isoel_r = -1;
     int samples_10ms = 0.0 * sampling_rate / 1000.0;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_indexes[0], 110, 2, 35, isoel_start, isoel_r, 0.05, 0);
+    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_indexes[3], 110, 2, 35, isoel_start, isoel_r, 0.05, 0);
     int peak_p1, peak_p2 = -1, peak_t;
     search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, 250, 300, isoel_start, isoel_r, peak_p1, peak_p2, peak_t);
 
     int isoel_p_l = -1, isoel_p_r = -1; double p_amp1 = 0, p_amp2 = 0;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p1, 200, /**dt*/2, /**primeter*/30, isoel_p_l, isoel_p_r, 0.2, 1, isoel_start - samples_10ms, &peak_p2, &p_amp1, &p_amp2);
-    get_p_values(lead_cpy, isoel_p_l, isoel_p_r, peak_p1, peak_p2, p_amp1, p_amp2);
 
     int p2_indx = -1;
     double min_val, max_val;
@@ -2123,42 +2111,31 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     double pos_amp = max_val - baseline;
     double neg_amp = baseline - min_val;
 
-    // védelem (zaj / lapos P ellen)
     if (pos_amp > 0 && neg_amp > 0)
     {
-        cout << "GGGGGGGGGGGGGGGGGGGG 0" << endl;
-        // abszolút indexek
         int min_abs = isoel_p_l + min_indx;
         int max_abs = isoel_p_l + max_indx;
         double smaller = std::min(pos_amp, neg_amp);
         double larger  = std::max(pos_amp, neg_amp);
 
-        // bifázisos, ha az egyik legalább fele a másiknak
         if (smaller >= 0.3 * larger)
         {
-            cout << "GGGGGGGGGGGGGGGGGGGG 1" << endl;
-            // peak_p az erősebb → p2 a gyengébb
             if (larger == pos_amp)
             {
-                cout << "GGGGGGGGGGGGGGGGGGGG 2" << endl;
                 if (abs(peak_p1 - max_abs) < 10)
                 {
-                    cout << "GGGGGGGGGGGGGGGGGGGG 3" << endl;
                     p2_indx = min_abs;
                 }
             }
             else
             {
-                cout << "GGGGGGGGGGGGGGGGGGGG 4" << endl;
                 if (abs(peak_p1 - min_abs) < 10)
                 {
-                    cout << "GGGGGGGGGGGGGGGGGGGG 5" << endl;
                     p2_indx = max_abs;
                 }
             }
         }
     }
-
 
     //double* signal, int len, double fs, int start_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1)
 
@@ -2238,6 +2215,7 @@ ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_chan
         detector.set_mode(peak_detector_offline::Mode::high_ppv);
     else
         detector.set_mode(peak_detector_offline::Mode::def);
+
 
     //detector.detect_multichannel(data, nr_channels, nr_samples_per_channel, peak_signal.data(), filt_signal.data(), threshold_signal.data(), peak_indexes);
     detector.detect(data[analysis_ch_indx], nr_samples_per_channel, peak_signal.data(), filt_signal.data(), threshold_signal.data(), peak_indexes);
