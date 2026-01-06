@@ -1654,8 +1654,16 @@ inline void min_max_idx(const double* arr, int len, double& min_val, double& max
     max_val = -1e9;
     for (int i = 0; i < len; ++i)
     {
-        if (arr[i] > max_val) { max_val = arr[i]; max_indx = i; }
-        if (arr[i] < min_val) { min_val = arr[i]; min_indx = i; }
+        if (arr[i] > max_val)
+        {
+            max_val = arr[i];
+            max_indx = i;
+        }
+        if (arr[i] < min_val)
+        {
+            min_val = arr[i];
+            min_indx = i;
+        }
     }
 }
 
@@ -1712,7 +1720,8 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
     }
 //    cout << "stop_indx_r after: " << stop_indx_r / fs << endl;
 
-    min_val = 1e9; max_val = -1e9;
+    min_val = 1e9;
+    max_val = -1e9;
     for (int i = stop_indx_l; i < stop_indx_r; ++i)
     {
         if (max_val < deriv[i]) max_val = deriv[i];
@@ -1739,7 +1748,7 @@ repeat_l:
     for (int i = peak_indx_l; i >= stop_indx_l; --i)
     {
         //if (extend_mode == 1)
-            //cout << "peak_indx_l: " << peak_indx_l << " i: " << i << " max_allowed_dev: " << max_allowed_dev << " deriv[i]: " << deriv[i] << endl;
+        //cout << "peak_indx_l: " << peak_indx_l << " i: " << i << " max_allowed_dev: " << max_allowed_dev << " deriv[i]: " << deriv[i] << endl;
 
         if (deriv[i] < max_allowed_dev)
         {
@@ -1786,14 +1795,14 @@ repeat_r:
 //    if (isoel_l < 0)
 //        isoel_l = 0;
 
-    cout << "isoel_l: " << isoel_l / fs << "  isoel_r: " << isoel_r / fs << endl;
+    //cout << "isoel_l: " << isoel_l / fs << "  isoel_r: " << isoel_r / fs << endl;
 
     write_binmx_to_file("c:/Tamas/test003.bin", (const double**)&deriv, 1, len, fs);
 }
 
 void search_p_and_t_peaks(double* signal, /*double* deriv, */int len, double fs, double max_search_ms_l, double max_search_ms_r, int isoel_l, int isoel_r, /*double max_allowed_dev, */int& peak_p1, int& peak_p2, int& peak_t)
 {
-    cout << "UUUUUUUU max_search_ms_l: " << max_search_ms_l << " max_search_ms_r: " << max_search_ms_r << " isoel_l: " << isoel_l << " isoel_r: " << isoel_r << endl;
+    //cout << "UUUUUUUU max_search_ms_l: " << max_search_ms_l << " max_search_ms_r: " << max_search_ms_r << " isoel_l: " << isoel_l << " isoel_r: " << isoel_r << endl;
     int nr_max_search_samples_l = max_search_ms_l * fs / 1000.0;
     int searc_stop_l = isoel_l - nr_max_search_samples_l;
     if (searc_stop_l < 0) searc_stop_l = 0;
@@ -2054,15 +2063,14 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
         return;
     }
 
-    unsigned int ch = analysis_ch_indx;
     double* lead_cpy = new double[nr_samples_per_ch];
     if (true)
     {
         iir_filter_4th_order bandpass_filter_;
         create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 2, sampling_rate, 0.1, 33);
-        bandpass_filter_.init_history_values(ecg_signal[ch][0], sampling_rate);
+        bandpass_filter_.init_history_values(ecg_signal[analysis_ch_indx][0], sampling_rate);
         for (unsigned int i = 0; i < nr_samples_per_ch; i++)
-            lead_cpy[i] = bandpass_filter_.filter(ecg_signal[ch][i]);
+            lead_cpy[i] = bandpass_filter_.filter(ecg_signal[analysis_ch_indx][i]);
         bandpass_filter_.init_history_values(lead_cpy[nr_samples_per_ch - 1], sampling_rate);
         for (int i = nr_samples_per_ch - 1; i >= 0; i--)
             lead_cpy[i] = bandpass_filter_.filter(lead_cpy[i]);
@@ -2082,7 +2090,7 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     else
     {
         for (unsigned int i = 0; i < nr_samples_per_ch; i++)
-            lead_cpy[i] = ecg_signal[ch][i];
+            lead_cpy[i] = ecg_signal[analysis_ch_indx][i];
     }
 
     remove_artifacts(lead_cpy, nr_samples_per_ch, sampling_rate);
@@ -2092,15 +2100,16 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
 //        lead_cpy[i] = lead_cpy[nr_samples_per_ch / 2];
 //    write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&lead_cpy, 1, nr_samples_per_ch, sampling_rate);
 
-    cout << "----------------------------- " << endl;
+    //cout << "----------------------------- " << endl;
 
     int isoel_start = -1, isoel_r = -1;
     int samples_10ms = 0.0 * sampling_rate / 1000.0;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_indexes[3], 110, 2, 35, isoel_start, isoel_r, 0.05, 0);
+    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_indexes[0], 110, 2, 35, isoel_start, isoel_r, 0.05, 0);
     int peak_p1, peak_p2 = -1, peak_t;
     search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, 250, 300, isoel_start, isoel_r, peak_p1, peak_p2, peak_t);
 
-    int isoel_p_l = -1, isoel_p_r = -1; double p_amp1 = 0, p_amp2 = 0;
+    int isoel_p_l = -1, isoel_p_r = -1;
+    double p_amp1 = 0, p_amp2 = 0;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p1, 200, /**dt*/2, /**primeter*/30, isoel_p_l, isoel_p_r, 0.2, 1, isoel_start - samples_10ms, &peak_p2, &p_amp1, &p_amp2);
 
     int p2_indx = -1;
@@ -2201,6 +2210,12 @@ ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_chan
 {
     if (analysis_ch_indx < 0) analysis_ch_indx = 0;
     if (analysis_ch_indx >= (int)nr_channels) analysis_ch_indx = nr_channels - 1;
+
+    cout << "DATA: ";
+    int nr_data_samples = nr_samples_per_channel >= 350 ? 350 : nr_samples_per_channel;
+    for (int i= 0; i < nr_data_samples; ++i) cout << "  " << round(data[analysis_ch_indx][i] * 1000);
+    cout << endl;
+
     std::vector<double> peak_signal(nr_samples_per_channel), filt_signal(nr_samples_per_channel), threshold_signal(nr_samples_per_channel);
     bool local_peak_indexes_used = false;
     if (!peak_indexes)
@@ -2220,6 +2235,9 @@ ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_chan
     //detector.detect_multichannel(data, nr_channels, nr_samples_per_channel, peak_signal.data(), filt_signal.data(), threshold_signal.data(), peak_indexes);
     detector.detect(data[analysis_ch_indx], nr_samples_per_channel, peak_signal.data(), filt_signal.data(), threshold_signal.data(), peak_indexes);
     ecg_analysis_result result;
+    cout << "PEAKS: ";
+    for (auto peak : *peak_indexes) cout << "  " << peak;
+    cout << endl;
     //analyse_ecg_multichannel(data, (unsigned int)nr_channels, nr_samples_per_channel, sampling_rate, *peak_indexes, annotations, result);
     analyse_ecg(data, (unsigned int)nr_channels, nr_samples_per_channel, sampling_rate, *peak_indexes, annotations, result, analysis_ch_indx);
 

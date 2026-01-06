@@ -111,7 +111,7 @@ std::vector<unsigned int> detect_multichannel(py::array_t<double> ecg_signal_np,
 }
 
 // Python binding az analyse_ecg függvényhez
-py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forcecast> ecg_signal_np, double sampling_rate, std::string mode = "default")
+py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forcecast> ecg_signal_np, double sampling_rate, std::string mode = "default", int analysis_ch_indx = -1)
 {
     // 1) Buffer ellenőrzése és adatmozgatás
     py::buffer_info buf = ecg_signal_np.request();
@@ -140,7 +140,7 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
 
     // 3) Analyse eredményének előkészítése
     std::vector<pqrst_indxes> annotations;
-    ecg_analysis_result result = analyse_ecg_detect_peaks(data_ptrs.data(), nr_channels, len, sampling_rate, annotations, 0, mode);
+    ecg_analysis_result result = analyse_ecg_detect_peaks(data_ptrs.data(), nr_channels, len, sampling_rate, annotations, 0, mode, analysis_ch_indx);
 
     py::list py_annotations;
     for (const auto& ann : annotations)
@@ -215,5 +215,5 @@ PYBIND11_MODULE(rspt_module, m)
     m.doc() = "ECG analysis module";
     m.def("detect_peaks", &detect_peaks, "Detect ECG peaks", py::arg("ecg_signal"), py::arg("sampling_rate"), py::arg("mode") = "default");
     m.def("detect_multichannel", &detect_multichannel, "Detect ECG peaks", py::arg("ecg_signal"), py::arg("sampling_rate"), py::arg("mode") = "default");
-    m.def("analyse_ecg", &analyse_ecg, "Perform ECG analysis (multichannel). Returns annotations and parameter dictionary", py::arg("ecg_signal"), py::arg("sampling_rate"), py::arg("mode") = "default");
+    m.def("analyse_ecg", &analyse_ecg, "Perform ECG analysis (multichannel). Returns annotations and parameter dictionary", py::arg("ecg_signal"), py::arg("sampling_rate"), py::arg("mode") = "default", py::arg("analysis_ch_indx") = -1);
 }
