@@ -1648,7 +1648,18 @@ inline void min_max(const double* arr, int len, double& min_val, double& max_val
     }
 }
 
-void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1, int a_stop_indx_r = -1)
+inline void min_max_idx(const double* arr, int len, double& min_val, double& max_val, int& min_indx, int& max_indx)
+{
+    min_val = 1e9;
+    max_val = -1e9;
+    for (int i = 0; i < len; ++i)
+    {
+        if (arr[i] > max_val) { max_val = arr[i]; max_indx = i; }
+        if (arr[i] < min_val) { min_val = arr[i]; min_indx = i; }
+    }
+}
+
+void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1, int a_stop_indx_r = -1, int* peak_p2 = 0, double* p_amp1 = 0, double* p_amp2 =0)
 {
     //cout << "peak_indx: " << peak_indx << " stop_indx: " << stop_indx << " max_val: " << max_val << " min_val: " << min_val << endl;
     //cout << endl << "------------------------------------------------------------" << endl;
@@ -1680,7 +1691,7 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
 
     double max_allowed_dev_r = min_val + (max_val - min_val) * isoel_tolerance * 0.1;
 
-    cout << "AAAAAAAAA stop_indx_r: " << stop_indx_r / fs << " peak_indx_r: " << peak_indx_r / fs << endl;
+//    cout << "AAAAAAAAA stop_indx_r: " << stop_indx_r / fs << " peak_indx_r: " << peak_indx_r / fs << endl;
 
     if (extend_mode == 1)
     {
@@ -1688,18 +1699,18 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
         for (int i = stop_indx_r; i >= peak_indx_r; --i)
             if (deriv[i] > max_allowed_dev_r && deriv[i] < deriv[i + samples_10ms])
             {
-                cout << i / fs << " deriv[i]: " << deriv[i] << " max_allowed_dev_r: " << max_allowed_dev_r << endl;
+//                cout << i / fs << " deriv[i]: " << deriv[i] << " max_allowed_dev_r: " << max_allowed_dev_r << endl;
                 --stop_indx_r;
             }
             else
             {
-                cout << i / fs << " deriv[i]: " << deriv[i] << " deriv[i + x]" << deriv[i + samples_10ms] << " max_allowed_dev_r: " << max_allowed_dev_r << " samples_10ms: " << samples_10ms << endl;
-                cout << "M" << endl;
+//                cout << i / fs << " deriv[i]: " << deriv[i] << " deriv[i + x]" << deriv[i + samples_10ms] << " max_allowed_dev_r: " << max_allowed_dev_r << " samples_10ms: " << samples_10ms << endl;
+//                cout << "M" << endl;
                 break;
             }
         stop_indx_r -= samples_10ms * 2.0;
     }
-    cout << "stop_indx_r after: " << stop_indx_r / fs << endl;
+//    cout << "stop_indx_r after: " << stop_indx_r / fs << endl;
 
     min_val = 1e9; max_val = -1e9;
     for (int i = stop_indx_l; i < stop_indx_r; ++i)
@@ -1709,12 +1720,12 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
     }
 
     double qrs_amp = max_val - min_val;
-    cout << "peak_indx: " << peak_indx << " qrs_amp: " << qrs_amp << " max_val: " << max_val << " min_val:" << min_val << " stop_indx_r: " << stop_indx_r << endl;
+//    cout << "peak_indx: " << peak_indx << " qrs_amp: " << qrs_amp << " max_val: " << max_val << " min_val:" << min_val << " stop_indx_r: " << stop_indx_r << endl;
     //double deriv_baseline = median(&deriv[0], len);
     //double signal_baseline = median(&signal[0], len);
     double max_allowed_dev = /*deriv_baseline + */ min_val + qrs_amp * isoel_tolerance;
 
-    cout << "peak_indx_l: " << peak_indx_l << " max_allowed_dev: " << max_allowed_dev << endl;
+//    cout << "peak_indx_l: " << peak_indx_l << " max_allowed_dev: " << max_allowed_dev << endl;
 
     vector<double> baselinev(len, max_allowed_dev);
     write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&baselinev, 1, len, fs);
@@ -1780,7 +1791,7 @@ repeat_r:
     write_binmx_to_file("c:/Tamas/test003.bin", (const double**)&deriv, 1, len, fs);
 }
 
-void search_p_and_t_peaks(double* signal, /*double* deriv, */int len, double fs, double max_search_ms_l, double max_search_ms_r, int isoel_l, int isoel_r, /*double max_allowed_dev, */int& peak_p, int& peak_t)
+void search_p_and_t_peaks(double* signal, /*double* deriv, */int len, double fs, double max_search_ms_l, double max_search_ms_r, int isoel_l, int isoel_r, /*double max_allowed_dev, */int& peak_p1, int& peak_p2, int& peak_t)
 {
     cout << "UUUUUUUU max_search_ms_l: " << max_search_ms_l << " max_search_ms_r: " << max_search_ms_r << " isoel_l: " << isoel_l << " isoel_r: " << isoel_r << endl;
     int nr_max_search_samples_l = max_search_ms_l * fs / 1000.0;
@@ -1788,7 +1799,8 @@ void search_p_and_t_peaks(double* signal, /*double* deriv, */int len, double fs,
     if (searc_stop_l < 0) searc_stop_l = 0;
     if (isoel_l >= len) isoel_l = len - 1;
     double maxval = -1e9;
-    peak_p = -1;
+    peak_p1 = -1;
+    peak_p2 = -1;
     //cout << "XXXXXX  isoel_l " << isoel_l / 500.0 << " searc_stop_l " << searc_stop_l / 500.0 << endl;
     double base = signal[isoel_l];
 //    cout << "BASE " << base << endl;
@@ -1809,11 +1821,11 @@ void search_p_and_t_peaks(double* signal, /*double* deriv, */int len, double fs,
         if (maxval < fabs(signal[i] - base))
         {
             maxval = fabs(signal[i] - base);
-            peak_p = i;
+            peak_p1 = i;
         }
     }
 
-    cout << "peak_p: " << peak_p / fs << endl;
+    cout << "peak_p: " << peak_p1 / fs << endl;
 
     int nr_max_search_samples_r = max_search_ms_r * fs / 1000.0;
     int searc_stop_r = nr_max_search_samples_r + isoel_r;
@@ -1906,7 +1918,7 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs)
 
     std::vector<double> buf(signal, signal + len);
     std::nth_element(buf.begin(), buf.begin() + len / 2, buf.end());
-    double baseline = buf[len / 2];
+    double baseline = (signal[a.p[0]] + signal[a.p[2]]) / 2;
 
     /* ================= P WAVES ================= */
 
@@ -1916,6 +1928,7 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs)
     {
         r.P1_DURATION  = (a.p[2] - a.p[0]) * 1000.0 / fs;
         r.P1_AMPLITUDE = signal[a.p[1]] - baseline;
+        cout << "baseline: " << baseline << " signal[a.p[1]]: " << signal[a.p[1]] << endl;
     }
 
     //if (r.P1_AMPLITUDE > 10600)
@@ -1929,6 +1942,12 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs)
         r.P2_DURATION  = (a.p[5] - a.p[3]) * 1000.0 / fs;
         r.P2_AMPLITUDE = signal[a.p[4]] - baseline;
     }
+
+
+//    for (int i = a.p[0]; i <= a.p[2]; ++i)
+//    {
+//
+//    }
 
     /* ================= QRS ================= */
 
@@ -2003,6 +2022,11 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs)
         r.T_AMPLITUDE = signal[a.t[1]] - baseline;
 
     return r;
+}
+
+void get_p_values(const double* signal, int on, int off, int& peak1, int& peak2, double& amp1, double& amp2)
+{
+
 }
 
 void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, ecg_analysis_result& result, unsigned int analysis_ch_indx = 0)
@@ -2084,11 +2108,58 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     int isoel_start = -1, isoel_r = -1;
     int samples_10ms = 0.0 * sampling_rate / 1000.0;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_indexes[0], 110, 2, 35, isoel_start, isoel_r, 0.05, 0);
-    int peak_p, peak_t;
-    search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, 250, 300, isoel_start, isoel_r, peak_p, peak_t);
+    int peak_p1, peak_p2 = -1, peak_t;
+    search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, 250, 300, isoel_start, isoel_r, peak_p1, peak_p2, peak_t);
 
-    int isoel_p_l = -1, isoel_p_r = -1;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p, 200, /**dt*/2, /**primeter*/30, isoel_p_l, isoel_p_r, 0.2, 1, isoel_start - samples_10ms);
+    int isoel_p_l = -1, isoel_p_r = -1; double p_amp1 = 0, p_amp2 = 0;
+    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p1, 200, /**dt*/2, /**primeter*/30, isoel_p_l, isoel_p_r, 0.2, 1, isoel_start - samples_10ms, &peak_p2, &p_amp1, &p_amp2);
+    get_p_values(lead_cpy, isoel_p_l, isoel_p_r, peak_p1, peak_p2, p_amp1, p_amp2);
+
+    int p2_indx = -1;
+    double min_val, max_val;
+    int min_indx, max_indx;
+    double baseline = (lead_cpy[isoel_p_l] + lead_cpy[isoel_p_r]) / 2;
+    min_max_idx(lead_cpy + isoel_p_l, isoel_p_r - isoel_p_l, min_val, max_val, min_indx, max_indx);
+    double pos_amp = max_val - baseline;
+    double neg_amp = baseline - min_val;
+
+    // védelem (zaj / lapos P ellen)
+    if (pos_amp > 0 && neg_amp > 0)
+    {
+        cout << "GGGGGGGGGGGGGGGGGGGG 0" << endl;
+        // abszolút indexek
+        int min_abs = isoel_p_l + min_indx;
+        int max_abs = isoel_p_l + max_indx;
+        double smaller = std::min(pos_amp, neg_amp);
+        double larger  = std::max(pos_amp, neg_amp);
+
+        // bifázisos, ha az egyik legalább fele a másiknak
+        if (smaller >= 0.3 * larger)
+        {
+            cout << "GGGGGGGGGGGGGGGGGGGG 1" << endl;
+            // peak_p az erősebb → p2 a gyengébb
+            if (larger == pos_amp)
+            {
+                cout << "GGGGGGGGGGGGGGGGGGGG 2" << endl;
+                if (abs(peak_p1 - max_abs) < 10)
+                {
+                    cout << "GGGGGGGGGGGGGGGGGGGG 3" << endl;
+                    p2_indx = min_abs;
+                }
+            }
+            else
+            {
+                cout << "GGGGGGGGGGGGGGGGGGGG 4" << endl;
+                if (abs(peak_p1 - min_abs) < 10)
+                {
+                    cout << "GGGGGGGGGGGGGGGGGGGG 5" << endl;
+                    p2_indx = max_abs;
+                }
+            }
+        }
+    }
+
+
     //double* signal, int len, double fs, int start_indx, double max_search_ms, double isoel_ms, double perimeter_ms, int& isoel_l, int& isoel_r, double isoel_tolerance = 0.01, int extend_mode = 1)
 
     int isoel_t_l = -1, isoel_t_r = -1;
@@ -2099,8 +2170,18 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     annotations.push_back({});
 //    if (isoel_p_l < 0) isoel_p_l = 0;
     annotations[0].p[0] = isoel_p_l;
-    annotations[0].p[1] = peak_p;
+    annotations[0].p[1] = peak_p1;
     annotations[0].p[2] = isoel_p_r;
+
+    if (p2_indx != -1)
+    {
+        int middle_indx_from_l = peak_p1 + (peak_p1 - isoel_p_l);
+        int middle_indx_from_r = p2_indx - (isoel_p_r - p2_indx);
+        annotations[0].p[3] = (middle_indx_from_l + middle_indx_from_r) / 2;
+        annotations[0].p[2] = annotations[0].p[3];
+        annotations[0].p[4] = p2_indx;
+        annotations[0].p[5] = isoel_p_r;
+    }
 
     annotations[0].r[0] = isoel_start;
     annotations[0].r[1] = peak_indexes[0];
@@ -2117,21 +2198,21 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
     cout << "P2_DURATION: " << result.result.P2_DURATION << endl;
     cout << "P2_AMPLITUDE: " << result.result.P2_AMPLITUDE << endl;
 
-    cout << "Q_DURATION: " << result.result.Q_DURATION << endl;
-    cout << "Q_AMPLITUDE: " << result.result.Q_AMPLITUDE << endl;
-    cout << "R_DURATION: " << result.result.R_DURATION << endl;
-    cout << "R_AMPLITUDE: " << result.result.R_AMPLITUDE << endl;
-    cout << "S_DURATION: " << result.result.S_DURATION << endl;
-    cout << "S_AMPLITUDE: " << result.result.S_AMPLITUDE << endl;
-
-    cout << "QRS_DURATION: " << result.result.QRS_DURATION << endl;
-
-    cout << "J_AMPLITUDE: " << result.result.J_AMPLITUDE << endl;
-    cout << "ST_20_AMPLITUDE: " << result.result.ST_20_AMPLITUDE << endl;
-    cout << "ST_40_AMPLITUDE: " << result.result.ST_40_AMPLITUDE << endl;
-    cout << "ST_60_AMPLITUDE: " << result.result.ST_60_AMPLITUDE << endl;
-    cout << "ST_80_AMPLITUDE: " << result.result.ST_80_AMPLITUDE << endl;
-    cout << "T_AMPLITUDE: " << result.result.T_AMPLITUDE << endl;
+//    cout << "Q_DURATION: " << result.result.Q_DURATION << endl;
+//    cout << "Q_AMPLITUDE: " << result.result.Q_AMPLITUDE << endl;
+//    cout << "R_DURATION: " << result.result.R_DURATION << endl;
+//    cout << "R_AMPLITUDE: " << result.result.R_AMPLITUDE << endl;
+//    cout << "S_DURATION: " << result.result.S_DURATION << endl;
+//    cout << "S_AMPLITUDE: " << result.result.S_AMPLITUDE << endl;
+//
+//    cout << "QRS_DURATION: " << result.result.QRS_DURATION << endl;
+//
+//    cout << "J_AMPLITUDE: " << result.result.J_AMPLITUDE << endl;
+//    cout << "ST_20_AMPLITUDE: " << result.result.ST_20_AMPLITUDE << endl;
+//    cout << "ST_40_AMPLITUDE: " << result.result.ST_40_AMPLITUDE << endl;
+//    cout << "ST_60_AMPLITUDE: " << result.result.ST_60_AMPLITUDE << endl;
+//    cout << "ST_80_AMPLITUDE: " << result.result.ST_80_AMPLITUDE << endl;
+//    cout << "T_AMPLITUDE: " << result.result.T_AMPLITUDE << endl;
 
 
     //cout << "isoel_start: " << isoel_start / 500.0 << " isoel_r: " << isoel_r / 500.0 << endl;
