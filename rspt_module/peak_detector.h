@@ -346,10 +346,12 @@ public:
             {
                 samples_after_peak_count_ = 0;
                 peak_signal[i] = ((marker_val_ == -1.0) ? filt_signal[i] : marker_val_);
+                cout << ".";
             }
             else
                 peak_signal[i] = 0;
         }
+        cout << endl;
         double average_r = 0;
         unsigned int nr_peaks = 0;
         for (unsigned int i = 0; i < nr_slope_samples_; ++i)
@@ -362,38 +364,37 @@ public:
                 peak_signal[i - nr_slope_samples_ + 1] = val;
                 average_r += filt_signal[i - nr_slope_samples_ + 1];
                 ++nr_peaks;
+                cout << "x";
             }
+        cout << endl << "nr_peaks: " << nr_peaks;
         average_r /= (double)nr_peaks;
         const int radius = (peak_correction_radius_ms_ * sampling_rate_) / 1000.0;
         unsigned int nr_min_peaks = 0;
         for (unsigned int i = radius; i < len - radius; ++i)
-            if (peak_signal[i])
+        {
+            if (!peak_signal[i])
+                continue;
+
+            unsigned int maxindx = 0, minindx = 0;
+            double maxval = -2e6, minval = 2e6;
+
+            for (int j = -radius; j < radius; ++j)
             {
-                unsigned int maxindx = 0, minindx = 0;
-                double maxval = -2000000, minval = 2000000;
-                for (int j = -radius; j < radius; ++j)
-                {
-                    if (maxval < ecg_signal[i + j] - baseline[i + j])
-                    {
-                        maxval = ecg_signal[i + j] - baseline[i + j];
-                        maxindx = i + j;
-                    }
-                    if (minval > ecg_signal[i + j] - baseline[i + j])
-                    {
-                        minval = ecg_signal[i + j] - baseline[i + j];
-                        minindx = i + j;
-                    }
-                }
-                double peakval = peak_signal[i];
-                peak_signal[i] = 0;
-                if (maxval > -minval)
-                {
-                    nr_min_peaks++;
-                    peak_signal[maxindx] = peakval;
-                }
-                else
-                    peak_signal[minindx] = peakval;
+                double v = ecg_signal[i + j] - baseline[i + j];
+                if (v > maxval) { maxval = v; maxindx = i + j; }
+                if (v < minval) { minval = v; minindx = i + j; }
             }
+
+            double peakval = peak_signal[i];
+
+            for (int j = -radius; j < radius; ++j)
+                peak_signal[i + j] = 0;
+
+            if (maxval > -minval)
+                peak_signal[maxindx] = peakval;
+            else
+                peak_signal[minindx] = peakval;
+        }
         if (peak_indexes)
         {
             peak_indexes->resize(nr_peaks);

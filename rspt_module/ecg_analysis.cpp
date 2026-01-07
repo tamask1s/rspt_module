@@ -2212,7 +2212,7 @@ ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_chan
     if (analysis_ch_indx >= (int)nr_channels) analysis_ch_indx = nr_channels - 1;
 
     cout << "DATA: ";
-    int nr_data_samples = nr_samples_per_channel >= 350 ? 350 : nr_samples_per_channel;
+    int nr_data_samples = nr_samples_per_channel >= 500 ? 500 : nr_samples_per_channel;
     for (int i= 0; i < nr_data_samples; ++i) cout << "  " << round(data[analysis_ch_indx][i] * 1000);
     cout << endl;
 
