@@ -2211,10 +2211,10 @@ ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_chan
     if (analysis_ch_indx < 0) analysis_ch_indx = 0;
     if (analysis_ch_indx >= (int)nr_channels) analysis_ch_indx = nr_channels - 1;
 
-    cout << "DATA: ";
-    int nr_data_samples = nr_samples_per_channel >= 500 ? 500 : nr_samples_per_channel;
-    for (int i= 0; i < nr_data_samples; ++i) cout << "  " << round(data[analysis_ch_indx][i] * 1000);
-    cout << endl;
+//    cout << "DATA: ";
+//    int nr_data_samples = nr_samples_per_channel >= 500 ? 500 : nr_samples_per_channel;
+//    for (int i= 0; i < nr_data_samples; ++i) cout << "  " << round(data[analysis_ch_indx][i] * 1000);
+//    cout << endl;
 
     std::vector<double> peak_signal(nr_samples_per_channel), filt_signal(nr_samples_per_channel), threshold_signal(nr_samples_per_channel);
     bool local_peak_indexes_used = false;
@@ -2235,9 +2235,9 @@ ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_chan
     //detector.detect_multichannel(data, nr_channels, nr_samples_per_channel, peak_signal.data(), filt_signal.data(), threshold_signal.data(), peak_indexes);
     detector.detect(data[analysis_ch_indx], nr_samples_per_channel, peak_signal.data(), filt_signal.data(), threshold_signal.data(), peak_indexes);
     ecg_analysis_result result;
-    cout << "PEAKS: ";
-    for (auto peak : *peak_indexes) cout << "  " << peak;
-    cout << endl;
+//    cout << "PEAKS: ";
+//    for (auto peak : *peak_indexes) cout << "  " << peak;
+//    cout << endl;
     //analyse_ecg_multichannel(data, (unsigned int)nr_channels, nr_samples_per_channel, sampling_rate, *peak_indexes, annotations, result);
     analyse_ecg(data, (unsigned int)nr_channels, nr_samples_per_channel, sampling_rate, *peak_indexes, annotations, result, analysis_ch_indx);
 
