@@ -191,6 +191,8 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
     output["P2_DURATION"] = result.result.P2_DURATION;
     output["P2_AMPLITUDE"] = result.result.P2_AMPLITUDE;
 
+    output["PQ_INTERVAL"] = result.result.PQ_INTERVAL;
+
     output["Q_DURATION"] = result.result.Q_DURATION;
     output["Q_AMPLITUDE"] = result.result.Q_AMPLITUDE;
     output["R_DURATION"] = result.result.R_DURATION;
@@ -199,6 +201,7 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
     output["S_AMPLITUDE"] = result.result.S_AMPLITUDE;
 
     output["QRS_DURATION"] = result.result.QRS_DURATION;
+    output["QT_INTERVAL"] = result.result.QT_INTERVAL;
 
     output["J_AMPLITUDE"] = result.result.J_AMPLITUDE;
     output["ST_20_AMPLITUDE"] = result.result.ST_20_AMPLITUDE;

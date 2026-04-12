@@ -3,8 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import rspt_module
 
-RECORD_PATH = '/media/sf_SharedFolder/QT/qt-database-1.0.0/sel301'
-RECORD_PATH = '/media/sf_SharedFolder/QT/qt-database-1.0.0/sel306'
+RECORD_PATH = '../../QT/qt-database-1.0.0/sel301'
+RECORD_PATH = '../../QT/qt-database-1.0.0/sel306'
+#RECORD_PATH = '../../CSE/CS50132D_CTS_Database_delivery/EDF_Output/ANE20000.edf'
+
 DISPLAY_LEAD_IDX = 0
 
 def load_qtdb_record(record_path):
@@ -219,4 +221,4 @@ for key in keys_to_compare:
     else:
         print(f"{key:<25} Érték hiányzik.")
 
-plot_annotations(signal[:, DISPLAY_LEAD_IDX], ann_by_type, rspt_result['annotations'], fs)
+#plot_annotations(signal[:, DISPLAY_LEAD_IDX], ann_by_type, rspt_result['annotations'], fs)
