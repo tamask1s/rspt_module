@@ -73,7 +73,7 @@ double median(const double* data, int len)
     return m;
 }
 
-void remove_artifacts(double* signal, int N, double fs, const ecg_analysis_config& c)
+void remove_artifacts(double* signal, int N, double fs, const ecg_analysis_config::artifact_t& c)
 {
     if (!signal || N < 3)
         return;
@@ -84,7 +84,7 @@ void remove_artifacts(double* signal, int N, double fs, const ecg_analysis_confi
     double d12 = fabs(signal[1] - signal[2]);
 
     // Ha az első minta nagyon eltér, de a következők egymáshoz közel vannak
-    if (d01 > c.artifact.artifact_removal_ratio * d12 && d02 > c.artifact.artifact_removal_ratio * d12)
+    if (d01 > c.artifact_removal_ratio * d12 && d02 > c.artifact_removal_ratio * d12)
         signal[0] = signal[1];
 
     /* -------- 2. Globális statisztika -------- */
@@ -104,8 +104,8 @@ void remove_artifacts(double* signal, int N, double fs, const ecg_analysis_confi
     if (std < 1e-6)
         return;
 
-    const double GLOBAL_TH = c.artifact.global_std_multiplier * std;
-    const double LOCAL_TH  = c.artifact.local_std_multiplier  * std;
+    const double GLOBAL_TH = c.global_std_multiplier * std;
+    const double LOCAL_TH  = c.local_std_multiplier  * std;
 
     /* -------- 3. Többi artifact eltávolítása -------- */
     for (int i = 1; i < N - 1; i++)
@@ -388,12 +388,14 @@ inline void find_wave_bounds(const double* signal, int peak_idx, int left_limit,
     }
 }
 
-ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs, const ecg_analysis_config& c)
+ch_result fill_results(double* signal, int len, pqrst_indxes& a, double fs, const ecg_analysis_config& c)
 {
     ch_result r;
     memset(&r, 0, sizeof(ch_result));
 
     double baseline = median(signal, len);
+    vector<double> baselinev(len, baseline);
+    write_binmx_to_file("c:/Tamas/test004.bin", (const double**)&baselinev, 1, len, fs);
 
     /* ================= P WAVES ================= */
     int overall_p_end = a.p[2];
@@ -540,6 +542,7 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs, const
     if (j >= 0 && j < len)
     {
         r.J_AMPLITUDE = signal[j] - baseline;
+        a.t[3] = j;
 
         int s20 = 20.0 * fs / 1000.0;
         if (j + s20 < len) r.ST_20_AMPLITUDE = signal[j + s20] - baseline;
@@ -555,7 +558,7 @@ ch_result fill_results(double* signal, int len, pqrst_indxes a, double fs, const
     return r;
 }
 
-void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, ecg_analysis_result& result, const ecg_analysis_config& c, unsigned int analysis_ch_indx = 0, int analysis_peak_indx = 0)
+void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, ecg_analysis_result& result, const ecg_analysis_config& c, unsigned int analysis_ch_indx = 0, int analysis_peak_indx = 0)
 {
     annotations.clear();
     result.result = {};
@@ -585,17 +588,14 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
         return;
     }
 
-    for (unsigned int i = 0; i < nr_samples_per_ch; i++)
-    {
-        //cout << ecg_signal[analysis_ch_indx][i] << ",";
-        //const_cast<double*>(ecg_signal[analysis_ch_indx])[i] *= 1.0;
-    }
-
     double* lead_cpy = new double[nr_samples_per_ch];
     for (unsigned int i = 0; i < nr_samples_per_ch; i++)
+    {
+        ecg_signal[analysis_ch_indx][i] *= c.bias.amplitude_scale;
         lead_cpy[i] = ecg_signal[analysis_ch_indx][i];
+    }
 
-    if (true)
+    if (c.filter.nr_filter_iterations)
     {
         iir_filter_4th_order bandpass_filter_;
         create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 2, sampling_rate, c.filter.low_cut_hz, c.filter.high_cut_hz);
@@ -613,16 +613,12 @@ void analyse_ecg(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_
             }
         };
 
-        forward_backward_filter(lead_cpy, nr_samples_per_ch, 2);
+        forward_backward_filter(lead_cpy, nr_samples_per_ch, c.filter.nr_filter_iterations);
     }
 
     if (c.artifact.enable_artifact_removal)
-        remove_artifacts(lead_cpy, nr_samples_per_ch, sampling_rate, c);
+        remove_artifacts(lead_cpy, nr_samples_per_ch, sampling_rate, c.artifact);
     write_binmx_to_file("c:/Tamas/test001.bin", (const double**)&lead_cpy, 1, nr_samples_per_ch, sampling_rate);
-//    std::sort(lead_cpy, lead_cpy + nr_samples_per_ch);
-//    for (unsigned int i = 0; i < nr_samples_per_ch; i++)
-//        lead_cpy[i] = lead_cpy[nr_samples_per_ch / 2];
-//    write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&lead_cpy, 1, nr_samples_per_ch, sampling_rate);
 
     int isoel_start = -1, isoel_r = -1;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_indexes[analysis_peak_indx], c.isoel.qrs_max_search_ms, c.isoel.qrs_dt_ms, c.isoel.qrs_perimeter_ms, isoel_start, isoel_r, c, c.isoel.qrs_isoel_tolerance, c.isoel.qrs_extend_mode);
@@ -723,7 +719,6 @@ ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_chan
     //detector.detect_multichannel(data, nr_channels, nr_samples_per_channel, peak_signal.data(), filt_signal.data(), trshld_signal.data(), peak_indexes);
     detector.detect(data[analysis_ch_indx], nr_samples_per_channel, peak_signal.data(), filt_signal.data(), trshld_signal.data(), peak_indexes);
     ecg_analysis_result result;
-    //analyse_ecg_multichannel(data, (unsigned int)nr_channels, nr_samples_per_channel, sampling_rate, *peak_indexes, annotations, result);
     if (true && peak_indexes->size() == 0)
     {
         double min_val, max_val;
@@ -738,7 +733,7 @@ ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_chan
                 peak_indexes->push_back(min_indx);
         }
     }
-    analyse_ecg(data, (unsigned int)nr_channels, nr_samples_per_channel, sampling_rate, *peak_indexes, annotations, result, c, analysis_ch_indx, analysis_peak_indx);
+    analyse_ecg((double**)data, (unsigned int)nr_channels, nr_samples_per_channel, sampling_rate, *peak_indexes, annotations, result, c, analysis_ch_indx, analysis_peak_indx);
 
     if (local_peak_indexes_used)
         delete peak_indexes;

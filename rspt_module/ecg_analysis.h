@@ -65,7 +65,7 @@ struct pqrst_indxes
 {
     int32_t p[6]; /// p1_on_index, p1_peak_index, p1_off_index, p2_on_index, p2_peak_index, p2_off_index. If p2_on_index, p2_peak_index, p2_off_index are set to 0, p2 is not present.
     int32_t r[5]; /// r_on_index, r_peak_index, r_off_index, q_idx if > 0, s_idx if > 0
-    int32_t t[3]; /// t_on_index, t_peak_index, t_off_index
+    int32_t t[4]; /// t_on_index, t_peak_index, t_off_index, j_point
 };
 
 struct ecg_analysis_config
@@ -84,7 +84,7 @@ struct ecg_analysis_config
     } phys;
 
     /* ================= Artifact removal ================= */
-    struct
+    struct artifact_t
     {
         double artifact_removal_ratio = 5.0;         // szomszédos mintákhoz viszonyított extrém eltérés aránya (single-sample spike detektálás)
 
@@ -157,6 +157,7 @@ struct ecg_analysis_config
     /* ================= Bandpass filter ================= */
     struct
     {
+        int nr_filter_iterations = 2;                 // másordendű oda-vissza filter ennyiszer szűri meg a jelet
         double low_cut_hz  = 0.1;                     // alsó vágási frekvencia (baseline wander eltávolítás)
         double high_cut_hz = 40.0;                    // felső vágási frekvencia (EMG / zaj csökkentése)
     } filter;
@@ -171,63 +172,16 @@ struct ecg_analysis_config
         double biphasic_p_max_gap_ms = 20.0;          // biphasic P két komponense közti max. távolság
         double biphasic_p_ratio      = 0.3;           // kisebb/nagyobb amplitúdó arány a biphasic P elfogadásához
     } search;
-};
 
-//struct ecg_analysis_config2
-//{
-//    /* ================= WAVE DETECTION THRESHOLDS ================= */
-//    struct wave_trshlds_t
-//    {
-//        double qrs_wave_trshld_ratio   = 0.01;  // Q, R, S boundary (% of amp)
-//        double qrs_shrink_ratio           = 0.05;
-//
-//        double min_qrs_presence_ratio     = 0.01;  // Q/S vs R
-//
-//        double biphasic_p_ratio           = 0.3;   // smaller/larger
-//        double biphasic_p_max_gap_ms      = 20.0;
-//
-//    } wave_th;
-//
-//
-//    /* ================= SEARCH WINDOWS ================= */
-//    struct search_windows_t
-//    {
-//        double s_search_max_ms            = 50.0;
-//        double p_search_left_ms           = 250.0;
-//        double t_search_right_ms          = 300.0;
-//
-//        double isoel_qrs_max_ms           = 110.0;
-//        double isoel_p_max_ms             = 200.0;
-//        double isoel_t_max_ms             = 200.0;
-//
-//        double isoel_dt_ms                = 2.0;
-//        double isoel_dt_multiplier        = 4.0;
-//
-//        double isoel_perimeter_ms         = 25.0;
-//    } windows;
-//
-//
-//    /* ================= ISOELECTRIC / BOUNDARY ================= */
-//    struct boundary_t
-//    {
-//        double isoel_tolerance_qrs        = 0.035;
-//        double isoel_tolerance_p          = 0.21;
-//        double isoel_tolerance_t          = 0.25;
-//
-//        double boundary_return_ratio      = 0.01;  // same as wave trshld usually
-//        double boundary_noise_guard_ratio = 0.01;  // used in S noise rejection
-//    } bounds;
-//
-//
-//    /* ================= DATASET BIAS (OPTIONAL) ================= */
-//    struct dataset_bias_t
-//    {
-//        double amplitude_scale            = 1.0;
-//        double duration_scale             = 1.0;
-//
-//        double noise_sensitivity_scale    = 1.0;
-//    } bias;
-//};
+    /* ================= DATASET BIAS (OPTIONAL) ================= */
+    struct dataset_bias_t
+    {
+        double amplitude_scale            = 1000.0;
+        double duration_scale             = 1.0;
+
+        double noise_sensitivity_scale    = 1.0;
+    } bias;
+};
 
 void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, ecg_analysis_result& result);
 ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate, std::vector<pqrst_indxes>& annotations, std::vector<unsigned int>* peak_indexes = nullptr, std::string mode = "default", int analysis_ch_indx = -1, int analysis_peak_indx = 0);
