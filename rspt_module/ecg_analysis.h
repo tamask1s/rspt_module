@@ -176,7 +176,7 @@ struct ecg_analysis_config
     /* ================= DATASET BIAS (OPTIONAL) ================= */
     struct dataset_bias_t
     {
-        double amplitude_scale            = 1000.0;
+        double amplitude_scale            = 1.0;
         double duration_scale             = 1.0;
 
         double noise_sensitivity_scale    = 1.0;

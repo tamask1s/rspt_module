@@ -695,6 +695,110 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
     delete[] lead_cpy;
 }
 
+static void fill_legacy_fields(ecg_analysis_result& result, const double** data, size_t nr_channels, size_t nr_samples, double sampling_rate, const std::vector<unsigned int>& peak_indexes, const std::vector<pqrst_indxes>& annotations, int analysis_ch_indx)
+{
+    const ch_result& r = result.result;
+
+    /* ---- RR statistics ---- */
+    if (peak_indexes.size() >= 2)
+    {
+        double total_ms = 0.0, max_rr = 0.0, min_rr = 1e9;
+        std::vector<double> rr_intervals;
+        for (size_t i = 1; i < peak_indexes.size(); ++i)
+        {
+            double rr_ms = (peak_indexes[i] - peak_indexes[i - 1]) / sampling_rate * 1000.0;
+            rr_intervals.push_back(rr_ms);
+            total_ms += rr_ms;
+            if (rr_ms < min_rr) min_rr = rr_ms;
+            if (rr_ms > max_rr) max_rr = rr_ms;
+        }
+        result.rr_interval_ms = total_ms / rr_intervals.size();
+        result.rr_variation_ms = max_rr - min_rr;
+        result.heart_rate_bpm = (result.rr_interval_ms > 0.0) ? 60000.0 / result.rr_interval_ms : 0.0;
+
+        result.premature_beat_count = 0;
+        for (double v : rr_intervals)
+            if (result.rr_interval_ms > 0.0 && v < 0.80 * result.rr_interval_ms)
+                result.premature_beat_count++;
+        result.is_sinus_rhythm = (result.premature_beat_count || (result.rr_interval_ms > 0.0 && (max_rr - min_rr) / result.rr_interval_ms > 0.10)) ? 0 : 1;
+    }
+
+    /* ---- Fields derived from ch_result ---- */
+    result.p_wave_duration_ms = r.P_DURATION;
+    result.qrs_duration_ms = r.QRS_DURATION;
+    result.qt_interval_ms = r.QT_INTERVAL;
+    result.pr_interval_ms = r.PQ_INTERVAL;
+    result.pr_segment_ms = result.pr_interval_ms - result.p_wave_duration_ms;
+
+    double rr_sec = result.rr_interval_ms / 1000.0;
+    result.qtc_interval_ms = (rr_sec > 0.0) ? result.qt_interval_ms / std::sqrt(rr_sec) : 0.0;
+
+    /* ---- T wave duration & ST segment from annotations ---- */
+    if (!annotations.empty())
+    {
+        const pqrst_indxes& a = annotations[0];
+        if (a.t[0] >= 0 && a.t[2] >= 0)
+            result.t_wave_duration_ms = (a.t[2] - a.t[0]) / sampling_rate * 1000.0;
+        if (a.t[0] >= 0 && a.r[2] >= 0)
+            result.st_segment_ms = (a.t[0] - a.r[2]) / sampling_rate * 1000.0;
+    }
+
+    /* ---- Per-channel amplitudes ---- */
+    for (size_t ch = 0; ch < 12; ++ch)
+    {
+        result.r_peak_amplitude_mV[ch] = 0.0;
+        result.s_wave_amplitude_mV[ch] = 0.0;
+        result.st_elevation_mV[ch] = 0.0;
+        result.st_depression_mV[ch] = 0.0;
+    }
+
+    if (!annotations.empty() && data)
+    {
+        const pqrst_indxes& a = annotations[0];
+        int r_idx = a.r[1];
+        unsigned int st_point = a.r[2] + (unsigned int)(0.06 * sampling_rate);
+        if (st_point >= nr_samples) st_point = (unsigned int)nr_samples - 1;
+
+        for (size_t ch = 0; ch < nr_channels && ch < 12; ++ch)
+        {
+            const double* lead = data[ch];
+            if (r_idx >= 0 && r_idx < (int)nr_samples)
+                result.r_peak_amplitude_mV[ch] = lead[r_idx];
+
+            /* S wave: minimum between R peak and QRS end */
+            unsigned int s_window = (unsigned int)(0.04 * sampling_rate);
+            unsigned int s_end = std::min((unsigned int)r_idx + s_window, (unsigned int)nr_samples - 1);
+            double s_val = lead[r_idx];
+            for (unsigned int i = r_idx; i <= s_end; ++i)
+                if (lead[i] < s_val)
+                    s_val = lead[i];
+            result.s_wave_amplitude_mV[ch] = s_val;
+
+            /* ST elevation/depression */
+            double pr_baseline = (a.p[0] >= 0 && a.p[0] + (int)(0.05 * sampling_rate) < (int)nr_samples)
+                ? lead[a.p[0] + (int)(0.05 * sampling_rate)]
+                : lead[r_idx];
+            double st_val = lead[st_point] - pr_baseline;
+            if (st_val >= 0.0)
+            {
+                result.st_elevation_mV[ch] = st_val;
+                result.st_depression_mV[ch] = 0.0;
+            }
+            else
+            {
+                result.st_elevation_mV[ch] = 0.0;
+                result.st_depression_mV[ch] = -st_val;
+            }
+        }
+    }
+
+    /* ---- Axis ---- */
+    double net_I = result.r_peak_amplitude_mV[0] - std::fabs(result.s_wave_amplitude_mV[0]);
+    double net_aVF = (nr_channels > 5) ? result.r_peak_amplitude_mV[5] - std::fabs(result.s_wave_amplitude_mV[5]) : 0.0;
+    result.frontal_plane_axis_deg = std::atan2(net_aVF, net_I) * 180.0 / M_PI;
+    result.horizontal_plane_axis_deg = 0.0;
+}
+
 ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate, std::vector<pqrst_indxes>& annotations, std::vector<unsigned int>* peak_indexes, std::string mode, int analysis_ch_indx, int analysis_peak_indx)
 {
     ecg_analysis_config c;
@@ -734,6 +838,8 @@ ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_chan
         }
     }
     analyse_ecg((double**)data, (unsigned int)nr_channels, nr_samples_per_channel, sampling_rate, *peak_indexes, annotations, result, c, analysis_ch_indx, analysis_peak_indx);
+
+    fill_legacy_fields(result, data, nr_channels, nr_samples_per_channel, sampling_rate, *peak_indexes, annotations, analysis_ch_indx);
 
     if (local_peak_indexes_used)
         delete peak_indexes;
