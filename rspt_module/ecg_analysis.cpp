@@ -282,9 +282,9 @@ repeat_r:
     }
 
     if (isoel_l == -1)
-        isoel_l = peak_indx - nr_perimeter_samples * 1.0;
+        isoel_l = std::max(0, std::min(len - 1, (int)(peak_indx - nr_perimeter_samples * 1.0)));
     if (isoel_r == -1)
-        isoel_r = peak_indx + nr_perimeter_samples * 1.0;
+        isoel_r = std::max(0, std::min(len - 1, (int)(peak_indx + nr_perimeter_samples * 1.0)));
 
     write_binmx_to_file("c:/Tamas/test003.bin", (const double**)&deriv, 1, len, fs);
 
@@ -450,6 +450,7 @@ ch_result fill_results(double* signal, int len, pqrst_indxes& a, double fs, cons
         {
             r.Q_DURATION = r.QRS_DURATION;
             r.Q_AMPLITUDE = q_amp_if_no_r - baseline;
+            a.r[3] = a.r[1];
         }
         else
         {
@@ -473,11 +474,13 @@ ch_result fill_results(double* signal, int len, pqrst_indxes& a, double fs, cons
                     int lbound, rbound;
                     find_wave_bounds<false>(signal, q_idx, a.r[0], a.r[2], baseline, r.Q_AMPLITUDE, lbound, rbound, c);
                     r.Q_DURATION = (rbound - lbound) * 1000.0 / fs;
+                    a.r[3] = q_idx;
                 }
                 else
                 {
                     r.Q_DURATION = 0;
                     r.Q_AMPLITUDE = 0;
+                    a.r[3] = -1;
                 }
             }
         }
@@ -509,12 +512,16 @@ ch_result fill_results(double* signal, int len, pqrst_indxes& a, double fs, cons
                 {
                     r.S_DURATION = 0;
                     r.S_AMPLITUDE = 0;
+                    a.r[4] = -1;
                 }
+                else
+                    a.r[4] = s_idx;
             }
             else
             {
                 r.S_DURATION = 0;
                 r.S_AMPLITUDE = 0;
+                a.r[4] = -1;
             }
         }
 
@@ -561,7 +568,7 @@ ch_result fill_results(double* signal, int len, pqrst_indxes& a, double fs, cons
 void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, ecg_analysis_result& result, const ecg_analysis_config& c, unsigned int analysis_ch_indx = 0, int analysis_peak_indx = 0)
 {
     annotations.clear();
-    result.result = {};
+    memset(&result, 0, sizeof(result));
     result.analysis_status = 0;
     result.pathologic_status[0] = 0;
     std::snprintf(result.status_message, sizeof(result.status_message), "OK");
@@ -585,6 +592,13 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
     {
         result.analysis_status = 4;
         std::snprintf(result.status_message, sizeof(result.status_message), "Invalid channel index");
+        return;
+    }
+
+    if (analysis_peak_indx < 0 || analysis_peak_indx >= static_cast<int>(peak_indexes.size()))
+    {
+        result.analysis_status = 5;
+        std::snprintf(result.status_message, sizeof(result.status_message), "Invalid analysis peak index");
         return;
     }
 
@@ -622,14 +636,35 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
 
     int isoel_start = -1, isoel_r = -1;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_indexes[analysis_peak_indx], c.isoel.qrs_max_search_ms, c.isoel.qrs_dt_ms, c.isoel.qrs_perimeter_ms, isoel_start, isoel_r, c, c.isoel.qrs_isoel_tolerance, c.isoel.qrs_extend_mode);
+    if (isoel_start < 0 || isoel_r < 0 || isoel_start >= (int)nr_samples_per_ch || isoel_r >= (int)nr_samples_per_ch || isoel_start >= isoel_r)
+    {
+        result.analysis_status = 5;
+        std::snprintf(result.status_message, sizeof(result.status_message), "Invalid QRS boundaries");
+        delete[] lead_cpy;
+        return;
+    }
 
     int peak_p1, peak_p2 = -1, peak_t;
     int p_isoel_offset_samples = c.search.p_isoel_offset_ms * sampling_rate / 1000.0;
     search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, c.search.p_search_left_ms, c.search.t_search_right_ms, isoel_start - p_isoel_offset_samples, isoel_r, peak_p1, peak_p2, peak_t, c);
+    if (peak_p1 < 0 || peak_p1 >= (int)nr_samples_per_ch || peak_t < 0 || peak_t >= (int)nr_samples_per_ch)
+    {
+        result.analysis_status = 5;
+        std::snprintf(result.status_message, sizeof(result.status_message), "Invalid P or T peak");
+        delete[] lead_cpy;
+        return;
+    }
 
     int isoel_p_l = -1, isoel_p_r = -1;
     double p_amp1 = 0, p_amp2 = 0;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p1, c.isoel.p_max_search_ms, c.isoel.p_dt_ms, c.isoel.p_perimeter_ms, isoel_p_l, isoel_p_r, c, c.isoel.p_isoel_tolerance, c.isoel.p_extend_mode, isoel_start, &peak_p2, &p_amp1, &p_amp2);
+    if (isoel_p_l < 0 || isoel_p_r < 0 || isoel_p_l >= (int)nr_samples_per_ch || isoel_p_r >= (int)nr_samples_per_ch || isoel_p_l >= isoel_p_r)
+    {
+        result.analysis_status = 5;
+        std::snprintf(result.status_message, sizeof(result.status_message), "Invalid P wave boundaries");
+        delete[] lead_cpy;
+        return;
+    }
 
     int p2_indx = -1;
     double min_val, max_val;
@@ -665,8 +700,21 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
 
     int isoel_t_l = -1, isoel_t_r = -1;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_t, c.isoel.t_max_search_ms, c.isoel.t_dt_ms, c.isoel.t_perimeter_ms, isoel_t_l, isoel_t_r, c, c.isoel.t_isoel_tolerance, c.isoel.t_extend_mode);
+    if (isoel_t_l < 0 || isoel_t_r < 0 || isoel_t_l >= (int)nr_samples_per_ch || isoel_t_r >= (int)nr_samples_per_ch || isoel_t_l >= isoel_t_r)
+    {
+        result.analysis_status = 5;
+        std::snprintf(result.status_message, sizeof(result.status_message), "Invalid T wave boundaries");
+        delete[] lead_cpy;
+        return;
+    }
 
     annotations.push_back({});
+    for (int i = 0; i < 6; ++i)
+        annotations[0].p[i] = -1;
+    for (int i = 0; i < 5; ++i)
+        annotations[0].r[i] = -1;
+    for (int i = 0; i < 4; ++i)
+        annotations[0].t[i] = -1;
     annotations[0].p[0] = isoel_p_l;
     annotations[0].p[1] = peak_p1;
     annotations[0].p[2] = isoel_p_r;
@@ -844,4 +892,43 @@ ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_chan
     if (local_peak_indexes_used)
         delete peak_indexes;
     return result;
+}
+
+void analyse_ecg_all_beats(const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, std::vector<ecg_analysis_result>& results, int analysis_ch_indx)
+{
+    annotations.clear();
+    results.clear();
+
+    if (analysis_ch_indx < 0)
+        analysis_ch_indx = 0;
+
+    ecg_analysis_config c;
+    annotations.reserve(peak_indexes.size());
+    results.reserve(peak_indexes.size());
+
+    for (size_t peak_index = 0; peak_index < peak_indexes.size(); ++peak_index)
+    {
+        std::vector<pqrst_indxes> beat_annotations;
+        ecg_analysis_result beat_result = {};
+
+        analyse_ecg((double**)data,
+                    (unsigned int)nr_channels,
+                    (unsigned int)nr_samples_per_channel,
+                    sampling_rate,
+                    peak_indexes,
+                    beat_annotations,
+                    beat_result,
+                    c,
+                    (unsigned int)analysis_ch_indx,
+                    (int)peak_index);
+
+        fill_legacy_fields(beat_result, data, nr_channels, nr_samples_per_channel, sampling_rate, peak_indexes, beat_annotations, analysis_ch_indx);
+
+        if (!beat_annotations.empty())
+            annotations.push_back(beat_annotations[0]);
+        else
+            annotations.push_back({});
+
+        results.push_back(beat_result);
+    }
 }

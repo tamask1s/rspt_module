@@ -1,3 +1,10 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <vector>
+
 struct ch_result
 {
     int P_DURATION; /** In case of a monophasic P wave this value equals to P1_DURATION. In case of biphasic P it is equal to P1_DURATION + P2_DURATION */
@@ -185,3 +192,4 @@ struct ecg_analysis_config
 
 void analyse_ecg_multichannel(const double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, ecg_analysis_result& result);
 ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate, std::vector<pqrst_indxes>& annotations, std::vector<unsigned int>* peak_indexes = nullptr, std::string mode = "default", int analysis_ch_indx = -1, int analysis_peak_indx = 0);
+void analyse_ecg_all_beats(const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, std::vector<ecg_analysis_result>& results, int analysis_ch_indx = -1);
