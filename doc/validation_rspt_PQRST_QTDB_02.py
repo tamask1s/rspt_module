@@ -2,12 +2,15 @@ import wfdb
 import numpy as np
 import matplotlib.pyplot as plt
 import rspt_module
+import struct
 
-RECORD_PATH = '../../QT/qt-database-1.0.0/sel301'
-RECORD_PATH = '../../QT/qt-database-1.0.0/sel306'
+#RECORD_PATH = '../../QT/qt-database-1.0.0/sel301'
+#RECORD_PATH = '../../QT/qt-database-1.0.0/sel306'
+RECORD_PATH = '../../CSE/CSE_BDF_INDEXED/mo1_001.bin'
 #RECORD_PATH = '../../CSE/CS50132D_CTS_Database_delivery/EDF_Output/ANE20000.edf'
 
 DISPLAY_LEAD_IDX = 0
+DISPLAY_BEAT_IDX = 5
 
 def load_qtdb_record(record_path):
     record = wfdb.rdrecord(record_path)
@@ -15,6 +18,28 @@ def load_qtdb_record(record_path):
     #signal = record.p_signal[:, DISPLAY_LEAD_IDX]
     signal = record.p_signal
     return signal, ann, record.fs
+
+def load_cse_bin_record(record_path):
+    with open(record_path, 'rb') as f:
+        fs = struct.unpack('d', f.read(8))[0]
+        channels = struct.unpack('q', f.read(8))[0]
+        nr_cols = struct.unpack('q', f.read(8))[0]
+        signals = np.zeros((nr_cols, channels))
+        for sample_idx in range(nr_cols):
+            for ch in range(channels):
+                signals[sample_idx, ch] = struct.unpack('d', f.read(8))[0]
+    return signals, fs
+
+def load_edf_record(record_path):
+    import pyedflib
+    with pyedflib.EdfReader(record_path) as f:
+        n_channels = f.signals_in_file
+        fs = f.getSampleFrequency(0)
+        n_samples = f.getNSamples()[0]
+        signals = np.zeros((n_samples, n_channels))
+        for i in range(n_channels):
+            signals[:, i] = f.readSignal(i)
+    return signals, fs
 
 def extract_structured_annotations(ann):
     """
@@ -48,7 +73,7 @@ def plot_annotations(signal, ann_by_type, rspt_annotations, fs):
     if not all(len(ann_by_type[k]) >= 2 for k in ['p', 'N', 't']):
         raise ValueError("Nem található elég teljes PQRST komplexum a megjelenítéshez.")
 
-    idx = 0 # -1  # utolsó előtti
+    idx = DISPLAY_BEAT_IDX
     p_on, p_peak, p_off = ann_by_type['p'][idx]
     r_on, r_peak, r_off = ann_by_type['N'][idx]
     t_on, t_peak, t_off = ann_by_type['t'][idx]
@@ -179,46 +204,73 @@ def print_result(result):
     print("Státusz:", result["status_message"])
 
 if __name__ == "__main__":
-    signal, ann, fs = load_qtdb_record(RECORD_PATH)
-    triplets = extract_structured_annotations(ann)
-    ann_by_type = organize_annotations_by_type(triplets)
-    result = compute_rspt_like_stats(signal[:, DISPLAY_LEAD_IDX], ann_by_type, fs)
-    print("\n--- QTDB alapú eredmények (utolsó előtti komplexus) ---")
-    print_result(result)
+    # Betöltés az útvonal alapján
+    if RECORD_PATH.endswith('.bin'):
+        signal, fs = load_cse_bin_record(RECORD_PATH)
+        ann_by_type = None
+        beat_idx = 0  # CSE: egyetlen komplexus
+    elif RECORD_PATH.endswith('.edf'):
+        signal, fs = load_edf_record(RECORD_PATH)
+        ann_by_type = None
+        beat_idx = 0  # CTS: egyetlen komplexus
+    else:
+        signal, ann, fs = load_qtdb_record(RECORD_PATH)
+        triplets = extract_structured_annotations(ann)
+        ann_by_type = organize_annotations_by_type(triplets)
+        result = compute_rspt_like_stats(signal[:, DISPLAY_LEAD_IDX], ann_by_type, fs)
+        print("\n--- QTDB alapú eredmények (utolsó előtti komplexus) ---")
+        print_result(result)
+        beat_idx = DISPLAY_BEAT_IDX
 
     # RSPT analízis meghívása
-    #rspt_result = rspt_module.analyse_ecg(np.stack([signal, signal], axis=1), fs)
-    rspt_result = rspt_module.analyse_ecg(signal, fs)
-    #print('annots1: ', ann_by_type)
-    print('annots2: ', rspt_result['annotations'])
-    
-    #rspt_result = rspt.analyze_ecg(ecg_signal=signal.tolist(), sampling_rate=fs, leads=[LEAD_IDX])
-    print("\n--- RSPT alapú eredmények (utolsó előtti komplexus) ---")
+    rspt_result = rspt_module.analyse_ecg(signal, fs, analysis_ch_indx=DISPLAY_LEAD_IDX, analysis_peak_indx=beat_idx)
+    print('annots: ', rspt_result['annotations'])
+    print("\n--- RSPT alapú eredmények ---")
     print_result(rspt_result)
 
-    # Eredmények összehasonlítása
-    print("\n--- Összehasonlítás: QTDB vs RSPT ---")
-    keys_to_compare = [
-        "rr_interval_ms", "rr_variation_ms", "heart_rate_bpm", "pr_interval_ms",
-        "qrs_duration_ms", "qt_interval_ms", "qtc_interval_ms",
-        "p_wave_duration_ms", "t_wave_duration_ms"
-    ]
+    # Összehasonlítás csak QTDB esetén
+    if ann_by_type is not None:
+        print("\n--- Összehasonlítás: QTDB vs RSPT ---")
+        keys_to_compare = [
+            "rr_interval_ms", "rr_variation_ms", "heart_rate_bpm", "pr_interval_ms",
+            "qrs_duration_ms", "qt_interval_ms", "qtc_interval_ms",
+            "p_wave_duration_ms", "t_wave_duration_ms"
+        ]
 
-#    for key in keys_to_compare:
-#        own_val = result.get(key)
-#        rspt_val = rspt_result.get(key)
-#        diff = abs(own_val - rspt_val) if own_val is not None and rspt_val is not None else None
-#        print(f"{key:<25} QTDB: {own_val:<10.2f} | RSPT: {rspt_val:<10.2f} | Δ: {diff:.2f}" if diff is not None else f"{key:<25} Érték hiányzik.")
+        for key in keys_to_compare:
+            own_val = result.get(key)
+            rspt_val = rspt_result.get(key)
 
-for key in keys_to_compare:
-    own_val = result.get(key)
-    rspt_val = rspt_result.get(key)
+            if own_val is not None and rspt_val is not None:
+                diff = abs(own_val - rspt_val)
+                pct_diff = (diff / rspt_val * 100) if rspt_val != 0 else float('nan')
+                print(f"{key:<25} QTDB: {own_val:<10.2f} | RSPT: {rspt_val:<10.2f} | Δ: {diff:<8.2f} | Δ%: {pct_diff:.2f}%")
+            else:
+                print(f"{key:<25} Érték hiányzik.")
 
-    if own_val is not None and rspt_val is not None:
-        diff = abs(own_val - rspt_val)
-        pct_diff = (diff / rspt_val * 100) if rspt_val != 0 else float('nan')
-        print(f"{key:<25} QTDB: {own_val:<10.2f} | RSPT: {rspt_val:<10.2f} | Δ: {diff:<8.2f} | Δ%: {pct_diff:.2f}%")
+    # Plot
+    if ann_by_type is not None:
+        plot_annotations(signal[:, DISPLAY_LEAD_IDX], ann_by_type, rspt_result['annotations'], fs)
     else:
-        print(f"{key:<25} Érték hiányzik.")
-
-#plot_annotations(signal[:, DISPLAY_LEAD_IDX], ann_by_type, rspt_result['annotations'], fs)
+        # Egyszerű RSPT-only plot
+        sig = signal[:, DISPLAY_LEAD_IDX]
+        ann = rspt_result['annotations'][0]
+        pad = int(0.2 * fs)
+        start = max(0, min(ann['p'][0], ann['r'][0], ann['t'][0]) - pad)
+        end = min(len(sig), max(ann['p'][2], ann['r'][2], ann['t'][2]) + pad)
+        t = np.arange(start, end) / fs
+        plt.figure(figsize=(12, 6))
+        plt.plot(t, sig[start:end], 'k-', linewidth=1)
+        colors = {'p': 'g', 'r': 'b', 't': 'c'}
+        markers = ['o', 'x', '^']
+        labels = ['on', 'peak', 'off']
+        for wt in ['p', 'r', 't']:
+            for i, si in enumerate(ann[wt]):
+                if start <= si <= end:
+                    plt.plot(si / fs, sig[si], colors[wt] + markers[i], label=f'{wt}_{labels[i]}')
+        plt.legend()
+        plt.title(f"RSPT annotációk – {RECORD_PATH}")
+        plt.xlabel("Idő (s)")
+        plt.ylabel("Amplitúdó")
+        plt.grid(True)
+        plt.show()
