@@ -102,30 +102,27 @@ void initialise_beat_result(rspt_ecg_beat_result& result)
     copy_message(result.status_message, "OK");
     initialise_annotation(result.annotation);
 
-    result.previous_rr_interval_ms = missing_value();
-    result.next_rr_interval_ms = missing_value();
     result.rr_interval_ms = missing_value();
     result.heart_rate_bpm = missing_value();
     result.p_wave_duration_ms = missing_value();
     result.p1_wave_duration_ms = missing_value();
+    result.p1_amplitude_input_units = missing_value();
     result.p2_wave_duration_ms = missing_value();
+    result.p2_amplitude_input_units = missing_value();
     result.pr_interval_ms = missing_value();
     result.pr_segment_ms = missing_value();
     result.pp_interval_ms = missing_value();
     result.q_duration_ms = missing_value();
+    result.q_amplitude_input_units = missing_value();
     result.r_duration_ms = missing_value();
+    result.r_amplitude_input_units = missing_value();
     result.s_duration_ms = missing_value();
+    result.s_amplitude_input_units = missing_value();
     result.qrs_duration_ms = missing_value();
     result.qt_interval_ms = missing_value();
     result.qtc_bazett_ms = missing_value();
-    result.qt_dispersion_ms = missing_value();
     result.st_segment_ms = missing_value();
     result.t_wave_duration_ms = missing_value();
-    result.p1_amplitude_input_units = missing_value();
-    result.p2_amplitude_input_units = missing_value();
-    result.q_amplitude_input_units = missing_value();
-    result.r_amplitude_input_units = missing_value();
-    result.s_amplitude_input_units = missing_value();
     result.j_point_amplitude_input_units = missing_value();
     result.st20_amplitude_input_units = missing_value();
     result.st40_amplitude_input_units = missing_value();
@@ -322,21 +319,6 @@ bool rr_interval_ms_for_index(
     return positive_finite(rr_ms);
 }
 
-bool next_rr_interval_ms_for_index(
-    const std::vector<unsigned int>& peak_indexes,
-    size_t left_peak_index,
-    double sampling_rate,
-    double& rr_ms)
-{
-    if (left_peak_index + 1 >= peak_indexes.size())
-        return false;
-    if (peak_indexes[left_peak_index + 1] <= peak_indexes[left_peak_index])
-        return false;
-
-    rr_ms = (peak_indexes[left_peak_index + 1] - peak_indexes[left_peak_index]) / sampling_rate * 1000.0;
-    return positive_finite(rr_ms);
-}
-
 void fill_beat_result(
     const ecg_analysis_result& core_result,
     const pqrst_indxes* previous_annotation,
@@ -366,56 +348,37 @@ void fill_beat_result(
     if (annotation)
         copy_annotation(*annotation, output.annotation, output.valid_fields);
 
-    const ch_result& result = core_result.result;
+    set_if_positive(core_result.p_wave_duration_ms, output.p_wave_duration_ms, output.valid_fields, RSPT_VALID_P_WAVE_DURATION_MS);
+    output.p1_wave_duration_ms = core_result.p1_wave_duration_ms;
+    output.p1_amplitude_input_units = core_result.p1_amplitude_input_units;
+    output.p2_wave_duration_ms = core_result.p2_wave_duration_ms;
+    output.p2_amplitude_input_units = core_result.p2_amplitude_input_units;
 
-    if (positive_finite(result.P1_DURATION))
-    {
-        output.p1_wave_duration_ms = result.P1_DURATION;
-        output.p1_amplitude_input_units = result.P1_AMPLITUDE;
-    }
-    if (positive_finite(result.P2_DURATION))
-    {
-        output.p2_wave_duration_ms = result.P2_DURATION;
-        output.p2_amplitude_input_units = result.P2_AMPLITUDE;
-    }
+    set_if_positive(core_result.pr_interval_ms, output.pr_interval_ms, output.valid_fields, RSPT_VALID_PR_INTERVAL_MS);
+    set_if_non_negative(core_result.pr_segment_ms, output.pr_segment_ms, output.valid_fields, RSPT_VALID_PR_SEGMENT_MS);
 
-    set_if_positive(result.P_DURATION, output.p_wave_duration_ms, output.valid_fields, RSPT_VALID_P_WAVE_DURATION_MS);
-    set_if_positive(result.PQ_INTERVAL, output.pr_interval_ms, output.valid_fields, RSPT_VALID_PR_INTERVAL_MS);
-    if (positive_finite(output.pr_interval_ms) && positive_finite(output.p_wave_duration_ms))
-        set_if_non_negative(output.pr_interval_ms - output.p_wave_duration_ms, output.pr_segment_ms, output.valid_fields, RSPT_VALID_PR_SEGMENT_MS);
+    output.q_duration_ms = core_result.q_duration_ms;
+    output.q_amplitude_input_units = core_result.q_amplitude_input_units;
+    output.r_duration_ms = core_result.r_duration_ms;
+    output.r_amplitude_input_units = core_result.r_amplitude_input_units;
+    output.s_duration_ms = core_result.s_duration_ms;
+    output.s_amplitude_input_units = core_result.s_amplitude_input_units;
 
-    if (positive_finite(result.Q_DURATION))
-    {
-        output.q_duration_ms = result.Q_DURATION;
-        output.q_amplitude_input_units = result.Q_AMPLITUDE;
-    }
-    if (positive_finite(result.R_DURATION))
-    {
-        output.r_duration_ms = result.R_DURATION;
-        output.r_amplitude_input_units = result.R_AMPLITUDE;
-    }
-    if (positive_finite(result.S_DURATION))
-    {
-        output.s_duration_ms = result.S_DURATION;
-        output.s_amplitude_input_units = result.S_AMPLITUDE;
-    }
-
-    set_if_positive(result.QRS_DURATION, output.qrs_duration_ms, output.valid_fields, RSPT_VALID_QRS_DURATION_MS);
-    set_if_positive(result.QT_INTERVAL, output.qt_interval_ms, output.valid_fields, RSPT_VALID_QT_INTERVAL_MS);
+    set_if_positive(core_result.qrs_duration_ms, output.qrs_duration_ms, output.valid_fields, RSPT_VALID_QRS_DURATION_MS);
+    set_if_positive(core_result.qt_interval_ms, output.qt_interval_ms, output.valid_fields, RSPT_VALID_QT_INTERVAL_MS);
     set_if_non_negative(core_result.st_segment_ms, output.st_segment_ms, output.valid_fields, RSPT_VALID_ST_SEGMENT_MS);
     set_if_positive(core_result.t_wave_duration_ms, output.t_wave_duration_ms, output.valid_fields, RSPT_VALID_T_WAVE_DURATION_MS);
 
-    output.j_point_amplitude_input_units = result.J_AMPLITUDE;
-    output.st20_amplitude_input_units = result.ST_20_AMPLITUDE;
-    output.st40_amplitude_input_units = result.ST_40_AMPLITUDE;
-    output.st60_amplitude_input_units = result.ST_60_AMPLITUDE;
-    output.st80_amplitude_input_units = result.ST_80_AMPLITUDE;
-    output.t_amplitude_input_units = result.T_AMPLITUDE;
+    output.j_point_amplitude_input_units = core_result.j_point_amplitude_input_units;
+    output.st20_amplitude_input_units = core_result.st20_amplitude_input_units;
+    output.st40_amplitude_input_units = core_result.st40_amplitude_input_units;
+    output.st60_amplitude_input_units = core_result.st60_amplitude_input_units;
+    output.st80_amplitude_input_units = core_result.st80_amplitude_input_units;
+    output.t_amplitude_input_units = core_result.t_amplitude_input_units;
 
     double previous_rr_ms = 0.0;
     if (rr_interval_ms_for_index(peak_indexes, beat_index, sampling_rate, previous_rr_ms))
     {
-        output.previous_rr_interval_ms = previous_rr_ms;
         output.rr_interval_ms = previous_rr_ms;
         output.heart_rate_bpm = 60000.0 / previous_rr_ms;
         output.valid_fields |= RSPT_VALID_RR_INTERVAL_MS | RSPT_VALID_HEART_RATE_BPM;
@@ -426,10 +389,6 @@ void fill_beat_result(
             output.valid_fields |= RSPT_VALID_QTC_BAZETT_MS;
         }
     }
-
-    double next_rr_ms = 0.0;
-    if (next_rr_interval_ms_for_index(peak_indexes, beat_index, sampling_rate, next_rr_ms))
-        output.next_rr_interval_ms = next_rr_ms;
 
     if (previous_annotation && annotation &&
         previous_annotation->p[1] >= 0 &&
@@ -488,7 +447,7 @@ const char* rspt_status_message(int32_t status)
 
 uint32_t rspt_c_api_version(void)
 {
-    return 1;
+    return 2;
 }
 
 int32_t rspt_detect_peaks_double(

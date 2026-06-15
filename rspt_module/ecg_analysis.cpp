@@ -21,6 +21,90 @@ using namespace std;
 #include "iir_filter_opt.h"
 #include "peak_detector.h"
 
+struct ecg_analysis_config
+{
+    struct artifact_t
+    {
+        double artifact_removal_ratio = 5.0;
+        double global_std_multiplier = 4.0;
+        double local_std_multiplier = 6.0;
+        bool enable_artifact_removal = true;
+    } artifact;
+
+    struct
+    {
+        double l1norm_dt1_multiplier = 2.0;
+        double l1norm_dt2_multiplier = 4.0;
+        double r_wave_deriv_ms = 6.0;
+    } deriv;
+
+    struct
+    {
+        double qrs_isoel_tolerance = 0.035;
+        double p_isoel_tolerance = 0.21;
+        double t_isoel_tolerance = 0.25;
+        double qrs_dt_ms = 2.0;
+        double p_dt_ms = 2.0;
+        double t_dt_ms = 4.0;
+        double qrs_perimeter_ms = 25.0;
+        double p_perimeter_ms = 30.0;
+        double t_perimeter_ms = 35.0;
+        double qrs_max_search_ms = 110.0;
+        double p_max_search_ms = 200.0;
+        double t_max_search_ms = 200.0;
+        int qrs_extend_mode = 0;
+        int p_extend_mode = 1;
+        int t_extend_mode = 1;
+    } isoel;
+
+    struct
+    {
+        double wave_presence_ratio = 0.01;
+        double wave_bound_ratio = 0.01;
+        double r_wave_bound_ratio = 0.05;
+        double qrs_shrink_trshld = 0.05;
+        double qrs_shrink_bound_ms = 10.0;
+        double isoel_r_search_ms = 30.0;
+    } wave;
+
+    struct
+    {
+        double min_wave_presence_ratio = 0.01;
+    } phys;
+
+    struct
+    {
+        double max_s_duration_sec = 0.05;
+    } s_wave;
+
+    struct
+    {
+        double pq_interval_offset_ms = 4.0;
+        double qt_interval_offset_ms = 8.0;
+    } timing;
+
+    struct
+    {
+        int nr_filter_iterations = 2;
+        double low_cut_hz = 0.1;
+        double high_cut_hz = 40.0;
+    } filter;
+
+    struct
+    {
+        double p_isoel_offset_ms = 15.0;
+        double p_search_left_ms = 250.0;
+        double t_search_right_ms = 300.0;
+        double biphasic_p_max_gap_ms = 20.0;
+        double biphasic_p_ratio = 0.3;
+    } search;
+
+    struct
+    {
+        double amplitude_scale = 1.0;
+    } bias;
+};
+
 void write_binmx_to_file(const char* filename, const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate)
 {
     FILE* f = fopen(filename, "wb");
@@ -388,11 +472,8 @@ inline void find_wave_bounds(const double* signal, int peak_idx, int left_limit,
     }
 }
 
-ch_result fill_results(double* signal, int len, pqrst_indxes& a, double fs, const ecg_analysis_config& c)
+void fill_wave_measurements(double* signal, int len, pqrst_indxes& a, double fs, const ecg_analysis_config& c, ecg_analysis_result& result)
 {
-    ch_result r;
-    memset(&r, 0, sizeof(ch_result));
-
     double baseline = median(signal, len);
     vector<double> baselinev(len, baseline);
     write_binmx_to_file("c:/Tamas/test004.bin", (const double**)&baselinev, 1, len, fs);
@@ -402,40 +483,40 @@ ch_result fill_results(double* signal, int len, pqrst_indxes& a, double fs, cons
     // P1
     if (a.p[0] >= 0 && a.p[1] >= 0 && a.p[2] >= 0 && a.p[0] < a.p[1] && a.p[1] < a.p[2] && a.p[2] < len)
     {
-        r.P1_DURATION = (a.p[2] - a.p[0]) * 1000.0 / fs;
-        r.P_DURATION = r.P1_DURATION;
-        r.P1_AMPLITUDE = signal[a.p[1]] - baseline;
+        result.p1_wave_duration_ms = (a.p[2] - a.p[0]) * 1000.0 / fs;
+        result.p_wave_duration_ms = result.p1_wave_duration_ms;
+        result.p1_amplitude_input_units = signal[a.p[1]] - baseline;
     }
 
     // P2 (optional)
     if (a.p[3] >= 0 && a.p[4] >= 0 && a.p[5] >= 0 && a.p[3] < a.p[4] && a.p[4] < a.p[5] && a.p[5] < len)
     {
-        r.P2_DURATION = (a.p[5] - a.p[3]) * 1000.0 / fs;
-        r.P_DURATION = r.P1_DURATION + r.P2_DURATION;
-        r.P2_AMPLITUDE = signal[a.p[4]] - baseline;
+        result.p2_wave_duration_ms = (a.p[5] - a.p[3]) * 1000.0 / fs;
+        result.p_wave_duration_ms = result.p1_wave_duration_ms + result.p2_wave_duration_ms;
+        result.p2_amplitude_input_units = signal[a.p[4]] - baseline;
         overall_p_end = a.p[5];
     }
     if (a.p[0] >= 0 && a.p[1] >= 0 && a.r[0] > a.p[0])
-        r.PQ_INTERVAL = (a.r[0] - a.p[0]) * 1000.0 / fs - c.timing.pq_interval_offset_ms;
+        result.pr_interval_ms = (a.r[0] - a.p[0]) * 1000.0 / fs - c.timing.pq_interval_offset_ms;
 
     /* ================= QRS ================= */
     if (a.r[0] >= 0 && a.r[1] >= 0 && a.r[2] >= 0 && a.r[0] < a.r[1] && a.r[1] < a.r[2] && a.r[2] < len)
     {
-        r.QRS_DURATION = (a.r[2] - a.r[0]) * 1000.0 / fs;
-        r.R_AMPLITUDE = signal[a.r[1]] - baseline;
+        result.qrs_duration_ms = (a.r[2] - a.r[0]) * 1000.0 / fs;
+        result.r_amplitude_input_units = signal[a.r[1]] - baseline;
         bool no_r = false;
         double q_amp_if_no_r = 0;
-        if (r.R_AMPLITUDE < 0)
+        if (result.r_amplitude_input_units < 0)
         {
             double min_val, max_val, min_val2, max_val2;
             int min_indx = 0, max_indx = 0, min_indx2 = 0, max_indx2 = 0;
             min_max_idx(&signal[overall_p_end], a.r[1] - overall_p_end, min_val, max_val, min_indx, max_indx);
             min_max_idx(&signal[overall_p_end], a.r[2] - overall_p_end, min_val2, max_val2, min_indx2, max_indx2);
-            r.R_AMPLITUDE = max_val - signal[overall_p_end];
+            result.r_amplitude_input_units = max_val - signal[overall_p_end];
             double r_prime_amp = max_val2 - signal[overall_p_end];
             a.r[1] = max_indx + overall_p_end;
-            if (r.R_AMPLITUDE < r_prime_amp)
-                r.R_AMPLITUDE = r_prime_amp;
+            if (result.r_amplitude_input_units < r_prime_amp)
+                result.r_amplitude_input_units = r_prime_amp;
 
             if ((min_val != 0) && (max_val / fabs(min_val) < c.wave.r_wave_bound_ratio))
             {
@@ -448,8 +529,8 @@ ch_result fill_results(double* signal, int len, pqrst_indxes& a, double fs, cons
         /* ---- Q wave ---- */
         if (no_r)
         {
-            r.Q_DURATION = r.QRS_DURATION;
-            r.Q_AMPLITUDE = q_amp_if_no_r - baseline;
+            result.q_duration_ms = result.qrs_duration_ms;
+            result.q_amplitude_input_units = q_amp_if_no_r - baseline;
             a.r[3] = a.r[1];
         }
         else
@@ -466,20 +547,20 @@ ch_result fill_results(double* signal, int len, pqrst_indxes& a, double fs, cons
 
             if (q_idx >= 0)
             {
-                r.Q_DURATION = (q_idx - a.r[0]) * 1000.0 / fs;
-                r.Q_AMPLITUDE = q_ext - baseline;
+                result.q_duration_ms = (q_idx - a.r[0]) * 1000.0 / fs;
+                result.q_amplitude_input_units = q_ext - baseline;
 
-                if (-r.Q_AMPLITUDE >= r.R_AMPLITUDE * c.wave.wave_presence_ratio)
+                if (-result.q_amplitude_input_units >= result.r_amplitude_input_units * c.wave.wave_presence_ratio)
                 {
                     int lbound, rbound;
-                    find_wave_bounds<false>(signal, q_idx, a.r[0], a.r[2], baseline, r.Q_AMPLITUDE, lbound, rbound, c);
-                    r.Q_DURATION = (rbound - lbound) * 1000.0 / fs;
+                    find_wave_bounds<false>(signal, q_idx, a.r[0], a.r[2], baseline, result.q_amplitude_input_units, lbound, rbound, c);
+                    result.q_duration_ms = (rbound - lbound) * 1000.0 / fs;
                     a.r[3] = q_idx;
                 }
                 else
                 {
-                    r.Q_DURATION = 0;
-                    r.Q_AMPLITUDE = 0;
+                    result.q_duration_ms = 0;
+                    result.q_amplitude_input_units = 0;
                     a.r[3] = -1;
                 }
             }
@@ -499,19 +580,19 @@ ch_result fill_results(double* signal, int len, pqrst_indxes& a, double fs, cons
 
         if (s_idx >= 0)
         {
-            r.S_DURATION = (s_idx - a.r[1]) * 1000.0 / fs;
-            r.S_AMPLITUDE = s_ext - baseline;
+            result.s_duration_ms = (s_idx - a.r[1]) * 1000.0 / fs;
+            result.s_amplitude_input_units = s_ext - baseline;
 
-            if (-r.S_AMPLITUDE >= r.R_AMPLITUDE * c.wave.wave_presence_ratio)
+            if (-result.s_amplitude_input_units >= result.r_amplitude_input_units * c.wave.wave_presence_ratio)
             {
                 int lbound, rbound;
-                find_wave_bounds<false>(signal, s_idx, a.r[1], a.r[2], baseline, r.S_AMPLITUDE, lbound, rbound, c);
-                r.S_DURATION = (rbound - lbound) * 1000.0 / fs;
+                find_wave_bounds<false>(signal, s_idx, a.r[1], a.r[2], baseline, result.s_amplitude_input_units, lbound, rbound, c);
+                result.s_duration_ms = (rbound - lbound) * 1000.0 / fs;
 
-                if (fabs(signal[rbound] - s_ext) < fabs(r.S_AMPLITUDE) * c.phys.min_wave_presence_ratio) /// there is no significant rising right edge of S -> no S
+                if (fabs(signal[rbound] - s_ext) < fabs(result.s_amplitude_input_units) * c.phys.min_wave_presence_ratio) /// there is no significant rising right edge of S -> no S
                 {
-                    r.S_DURATION = 0;
-                    r.S_AMPLITUDE = 0;
+                    result.s_duration_ms = 0;
+                    result.s_amplitude_input_units = 0;
                     a.r[4] = -1;
                 }
                 else
@@ -519,8 +600,8 @@ ch_result fill_results(double* signal, int len, pqrst_indxes& a, double fs, cons
             }
             else
             {
-                r.S_DURATION = 0;
-                r.S_AMPLITUDE = 0;
+                result.s_duration_ms = 0;
+                result.s_amplitude_input_units = 0;
                 a.r[4] = -1;
             }
         }
@@ -528,41 +609,39 @@ ch_result fill_results(double* signal, int len, pqrst_indxes& a, double fs, cons
         /* ---- R wave duration ---- */
         if (no_r)
         {
-            r.R_DURATION  = 0;
-            r.R_AMPLITUDE = 0;
+            result.r_duration_ms = 0;
+            result.r_amplitude_input_units = 0;
         }
-        else if (r.R_AMPLITUDE != 0)
+        else if (result.r_amplitude_input_units != 0)
         {
             int lbound, rbound;
-            find_wave_bounds<true>(signal, a.r[1], a.r[0], a.r[2], baseline, r.R_AMPLITUDE, lbound, rbound, c);
-            r.R_DURATION = (rbound - lbound) * 1000.0 / fs;
+            find_wave_bounds<true>(signal, a.r[1], a.r[0], a.r[2], baseline, result.r_amplitude_input_units, lbound, rbound, c);
+            result.r_duration_ms = (rbound - lbound) * 1000.0 / fs;
         }
         else
-            r.R_DURATION = std::max(0, r.QRS_DURATION - r.Q_DURATION - r.S_DURATION);
+            result.r_duration_ms = std::max(0.0, result.qrs_duration_ms - result.q_duration_ms - result.s_duration_ms);
     }
 
     if (a.t[1] >= 0)
-        r.QT_INTERVAL = (a.t[2] - a.r[0]) * 1000.0 / fs + c.timing.qt_interval_offset_ms;
+        result.qt_interval_ms = (a.t[2] - a.r[0]) * 1000.0 / fs + c.timing.qt_interval_offset_ms;
 
     /* ================= ST / J ================= */
     int j = a.r[2];
     if (j >= 0 && j < len)
     {
-        r.J_AMPLITUDE = signal[j] - baseline;
+        result.j_point_amplitude_input_units = signal[j] - baseline;
         a.t[3] = j;
 
         int s20 = 20.0 * fs / 1000.0;
-        if (j + s20 < len) r.ST_20_AMPLITUDE = signal[j + s20] - baseline;
-        if (j + s20 * 2 < len) r.ST_40_AMPLITUDE = signal[j + s20 * 2] - baseline;
-        if (j + s20 * 3 < len) r.ST_60_AMPLITUDE = signal[j + s20 * 3] - baseline;
-        if (j + s20 * 4 < len) r.ST_80_AMPLITUDE = signal[j + s20 * 4] - baseline;
+        if (j + s20 < len) result.st20_amplitude_input_units = signal[j + s20] - baseline;
+        if (j + s20 * 2 < len) result.st40_amplitude_input_units = signal[j + s20 * 2] - baseline;
+        if (j + s20 * 3 < len) result.st60_amplitude_input_units = signal[j + s20 * 3] - baseline;
+        if (j + s20 * 4 < len) result.st80_amplitude_input_units = signal[j + s20 * 4] - baseline;
     }
 
     /* ================= T ================= */
     if (a.t[1] >= 0 && a.t[1] < len)
-        r.T_AMPLITUDE = signal[a.t[1]] - baseline;
-
-    return r;
+        result.t_amplitude_input_units = signal[a.t[1]] - baseline;
 }
 
 void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_samples_per_ch, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, ecg_analysis_result& result, const ecg_analysis_config& c, unsigned int analysis_ch_indx = 0, int analysis_peak_indx = 0)
@@ -570,7 +649,6 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
     annotations.clear();
     memset(&result, 0, sizeof(result));
     result.analysis_status = 0;
-    result.pathologic_status[0] = 0;
     std::snprintf(result.status_message, sizeof(result.status_message), "OK");
 
     if (peak_indexes.size() < 1)
@@ -738,15 +816,13 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
     annotations[0].t[1] = peak_t;
     annotations[0].t[2] = isoel_t_r;
 
-    result.result = fill_results((double*)ecg_signal[analysis_ch_indx], nr_samples_per_ch, annotations[0], sampling_rate, c);
+    fill_wave_measurements((double*)ecg_signal[analysis_ch_indx], nr_samples_per_ch, annotations[0], sampling_rate, c, result);
 
     delete[] lead_cpy;
 }
 
 static void fill_legacy_fields(ecg_analysis_result& result, const double** data, size_t nr_channels, size_t nr_samples, double sampling_rate, const std::vector<unsigned int>& peak_indexes, const std::vector<pqrst_indxes>& annotations, int analysis_ch_indx)
 {
-    const ch_result& r = result.result;
-
     /* ---- RR statistics ---- */
     if (peak_indexes.size() >= 2)
     {
@@ -771,11 +847,6 @@ static void fill_legacy_fields(ecg_analysis_result& result, const double** data,
         result.is_sinus_rhythm = (result.premature_beat_count || (result.rr_interval_ms > 0.0 && (max_rr - min_rr) / result.rr_interval_ms > 0.10)) ? 0 : 1;
     }
 
-    /* ---- Fields derived from ch_result ---- */
-    result.p_wave_duration_ms = r.P_DURATION;
-    result.qrs_duration_ms = r.QRS_DURATION;
-    result.qt_interval_ms = r.QT_INTERVAL;
-    result.pr_interval_ms = r.PQ_INTERVAL;
     result.pr_segment_ms = result.pr_interval_ms - result.p_wave_duration_ms;
 
     double rr_sec = result.rr_interval_ms / 1000.0;
@@ -794,10 +865,10 @@ static void fill_legacy_fields(ecg_analysis_result& result, const double** data,
     /* ---- Per-channel amplitudes ---- */
     for (size_t ch = 0; ch < 12; ++ch)
     {
-        result.r_peak_amplitude_mV[ch] = 0.0;
-        result.s_wave_amplitude_mV[ch] = 0.0;
-        result.st_elevation_mV[ch] = 0.0;
-        result.st_depression_mV[ch] = 0.0;
+        result.r_peak_amplitude_input_units[ch] = 0.0;
+        result.s_wave_amplitude_input_units[ch] = 0.0;
+        result.st_elevation_input_units[ch] = 0.0;
+        result.st_depression_input_units[ch] = 0.0;
     }
 
     if (!annotations.empty() && data)
@@ -811,7 +882,7 @@ static void fill_legacy_fields(ecg_analysis_result& result, const double** data,
         {
             const double* lead = data[ch];
             if (r_idx >= 0 && r_idx < (int)nr_samples)
-                result.r_peak_amplitude_mV[ch] = lead[r_idx];
+                result.r_peak_amplitude_input_units[ch] = lead[r_idx];
 
             /* S wave: minimum between R peak and QRS end */
             unsigned int s_window = (unsigned int)(0.04 * sampling_rate);
@@ -820,7 +891,7 @@ static void fill_legacy_fields(ecg_analysis_result& result, const double** data,
             for (unsigned int i = r_idx; i <= s_end; ++i)
                 if (lead[i] < s_val)
                     s_val = lead[i];
-            result.s_wave_amplitude_mV[ch] = s_val;
+            result.s_wave_amplitude_input_units[ch] = s_val;
 
             /* ST elevation/depression */
             double pr_baseline = (a.p[0] >= 0 && a.p[0] + (int)(0.05 * sampling_rate) < (int)nr_samples)
@@ -829,20 +900,20 @@ static void fill_legacy_fields(ecg_analysis_result& result, const double** data,
             double st_val = lead[st_point] - pr_baseline;
             if (st_val >= 0.0)
             {
-                result.st_elevation_mV[ch] = st_val;
-                result.st_depression_mV[ch] = 0.0;
+                result.st_elevation_input_units[ch] = st_val;
+                result.st_depression_input_units[ch] = 0.0;
             }
             else
             {
-                result.st_elevation_mV[ch] = 0.0;
-                result.st_depression_mV[ch] = -st_val;
+                result.st_elevation_input_units[ch] = 0.0;
+                result.st_depression_input_units[ch] = -st_val;
             }
         }
     }
 
     /* ---- Axis ---- */
-    double net_I = result.r_peak_amplitude_mV[0] - std::fabs(result.s_wave_amplitude_mV[0]);
-    double net_aVF = (nr_channels > 5) ? result.r_peak_amplitude_mV[5] - std::fabs(result.s_wave_amplitude_mV[5]) : 0.0;
+    double net_I = result.r_peak_amplitude_input_units[0] - std::fabs(result.s_wave_amplitude_input_units[0]);
+    double net_aVF = (nr_channels > 5) ? result.r_peak_amplitude_input_units[5] - std::fabs(result.s_wave_amplitude_input_units[5]) : 0.0;
     result.frontal_plane_axis_deg = std::atan2(net_aVF, net_I) * 180.0 / M_PI;
     result.horizontal_plane_axis_deg = 0.0;
 }

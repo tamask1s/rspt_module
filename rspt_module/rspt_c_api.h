@@ -46,7 +46,6 @@ typedef enum rspt_detection_mode {
 #define RSPT_VALID_T_WAVE_DURATION_MS        (1ULL << 10)
 #define RSPT_VALID_PP_INTERVAL_MS            (1ULL << 11)
 #define RSPT_VALID_PQRS_T_ANNOTATION         (1ULL << 12)
-#define RSPT_VALID_QT_DISPERSION_MS          (1ULL << 13)
 
 typedef struct rspt_pqrst_annotation {
     int32_t p1_onset_sample;
@@ -78,33 +77,30 @@ typedef struct rspt_ecg_beat_result {
 
     rspt_pqrst_annotation annotation;
 
-    double previous_rr_interval_ms;
-    double next_rr_interval_ms;
     double rr_interval_ms;
     double heart_rate_bpm;
 
     double p_wave_duration_ms;
     double p1_wave_duration_ms;
+    double p1_amplitude_input_units;
     double p2_wave_duration_ms;
+    double p2_amplitude_input_units;
     double pr_interval_ms;
     double pr_segment_ms;
     double pp_interval_ms;
 
     double q_duration_ms;
+    double q_amplitude_input_units;
     double r_duration_ms;
+    double r_amplitude_input_units;
     double s_duration_ms;
+    double s_amplitude_input_units;
     double qrs_duration_ms;
     double qt_interval_ms;
     double qtc_bazett_ms;
-    double qt_dispersion_ms;
     double st_segment_ms;
     double t_wave_duration_ms;
 
-    double p1_amplitude_input_units;
-    double p2_amplitude_input_units;
-    double q_amplitude_input_units;
-    double r_amplitude_input_units;
-    double s_amplitude_input_units;
     double j_point_amplitude_input_units;
     double st20_amplitude_input_units;
     double st40_amplitude_input_units;
