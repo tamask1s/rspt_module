@@ -71,16 +71,112 @@ static void set_detector_mode(peak_detector_offline& detector, const std::string
         detector.set_mode(peak_detector_offline::Mode::def);
 }
 
-static py::dict annotation_to_dict(const pqrst_indxes& ann)
+static int mode_to_c_api_value(const std::string& mode)
+{
+    if (mode == "high_sensitivity")
+        return RSPT_MODE_HIGH_SENSITIVITY;
+    if (mode == "high_ppv")
+        return RSPT_MODE_HIGH_PPV;
+    return RSPT_MODE_DEFAULT;
+}
+
+static double numeric_or_zero(double value)
+{
+    return std::isfinite(value) ? value : 0.0;
+}
+
+static py::object numeric_or_none(double value)
+{
+    if (std::isfinite(value))
+        return py::float_(value);
+    return py::none();
+}
+
+static py::dict annotation_to_dict(const rspt_pqrst_annotation& ann)
 {
     py::dict complex;
-    complex["p"] = py::make_tuple(ann.p[0], ann.p[1], ann.p[2]);
-    complex["r"] = py::make_tuple(ann.r[0], ann.r[1], ann.r[2]);
-    complex["t"] = py::make_tuple(ann.t[0], ann.t[1], ann.t[2]);
-    complex["p_full"] = py::make_tuple(ann.p[0], ann.p[1], ann.p[2], ann.p[3], ann.p[4], ann.p[5]);
-    complex["r_full"] = py::make_tuple(ann.r[0], ann.r[1], ann.r[2], ann.r[3], ann.r[4]);
-    complex["t_full"] = py::make_tuple(ann.t[0], ann.t[1], ann.t[2], ann.t[3]);
+    complex["p"] = py::make_tuple(ann.p1_onset_sample, ann.p1_peak_sample, ann.p1_offset_sample);
+    complex["r"] = py::make_tuple(ann.qrs_onset_sample, ann.r_peak_sample, ann.qrs_offset_sample);
+    complex["t"] = py::make_tuple(ann.t_onset_sample, ann.t_peak_sample, ann.t_offset_sample);
+    complex["p_full"] = py::make_tuple(
+        ann.p1_onset_sample,
+        ann.p1_peak_sample,
+        ann.p1_offset_sample,
+        ann.p2_onset_sample,
+        ann.p2_peak_sample,
+        ann.p2_offset_sample);
+    complex["r_full"] = py::make_tuple(
+        ann.qrs_onset_sample,
+        ann.r_peak_sample,
+        ann.qrs_offset_sample,
+        ann.q_peak_sample,
+        ann.s_peak_sample);
+    complex["t_full"] = py::make_tuple(
+        ann.t_onset_sample,
+        ann.t_peak_sample,
+        ann.t_offset_sample,
+        ann.j_point_sample);
     return complex;
+}
+
+static void add_standard_metric_fields(py::dict& output, const rspt_ecg_beat_result& result, const rspt_ecg_summary_result* summary)
+{
+    double qtc_bazett_ms = result.qtc_bazett_ms;
+    if (summary && std::isfinite(summary->rr_interval_ms.mean) && summary->rr_interval_ms.mean > 0.0 && result.qt_interval_ms > 0.0)
+        qtc_bazett_ms = result.qt_interval_ms / std::sqrt(summary->rr_interval_ms.mean / 1000.0);
+
+    output["rr_interval_ms"]       = summary ? numeric_or_zero(summary->rr_interval_ms.mean) : numeric_or_zero(result.rr_interval_ms);
+    output["rr_variation_ms"]      = summary ? numeric_or_zero(summary->rr_variation_ms) : 0.0;
+    output["heart_rate_bpm"]       = summary ? numeric_or_zero(summary->heart_rate_bpm.mean) : numeric_or_zero(result.heart_rate_bpm);
+    output["pr_interval_ms"]       = numeric_or_zero(result.pr_interval_ms);
+    output["pr_segment_ms"]        = numeric_or_zero(result.pr_segment_ms);
+    output["qrs_duration_ms"]      = numeric_or_zero(result.qrs_duration_ms);
+    output["qt_interval_ms"]       = numeric_or_zero(result.qt_interval_ms);
+    output["qtc_bazett_ms"]        = numeric_or_zero(qtc_bazett_ms);
+    output["qtc_interval_ms"]      = numeric_or_zero(qtc_bazett_ms);
+    output["st_segment_ms"]        = numeric_or_zero(result.st_segment_ms);
+    output["p_wave_duration_ms"]   = numeric_or_zero(result.p_wave_duration_ms);
+    output["t_wave_duration_ms"]   = numeric_or_zero(result.t_wave_duration_ms);
+}
+
+static void add_validation_metric_fields(py::dict& output, const rspt_ecg_beat_result& result)
+{
+    output["p1_wave_duration_ms"] = numeric_or_zero(result.p1_wave_duration_ms);
+    output["p1_amplitude_input_units"] = numeric_or_zero(result.p1_amplitude_input_units);
+    output["p2_wave_duration_ms"] = numeric_or_zero(result.p2_wave_duration_ms);
+    output["p2_amplitude_input_units"] = numeric_or_zero(result.p2_amplitude_input_units);
+    output["q_duration_ms"] = numeric_or_zero(result.q_duration_ms);
+    output["q_amplitude_input_units"] = numeric_or_zero(result.q_amplitude_input_units);
+    output["r_duration_ms"] = numeric_or_zero(result.r_duration_ms);
+    output["r_amplitude_input_units"] = numeric_or_zero(result.r_amplitude_input_units);
+    output["s_duration_ms"] = numeric_or_zero(result.s_duration_ms);
+    output["s_amplitude_input_units"] = numeric_or_zero(result.s_amplitude_input_units);
+    output["j_point_amplitude_input_units"] = numeric_or_zero(result.j_point_amplitude_input_units);
+    output["st20_amplitude_input_units"] = numeric_or_zero(result.st20_amplitude_input_units);
+    output["st40_amplitude_input_units"] = numeric_or_zero(result.st40_amplitude_input_units);
+    output["st60_amplitude_input_units"] = numeric_or_zero(result.st60_amplitude_input_units);
+    output["st80_amplitude_input_units"] = numeric_or_zero(result.st80_amplitude_input_units);
+    output["t_amplitude_input_units"] = numeric_or_zero(result.t_amplitude_input_units);
+
+    output["P1_DURATION"] = numeric_or_zero(result.p1_wave_duration_ms);
+    output["P1_AMPLITUDE"] = numeric_or_zero(result.p1_amplitude_input_units);
+    output["P2_DURATION"] = numeric_or_zero(result.p2_wave_duration_ms);
+    output["P2_AMPLITUDE"] = numeric_or_zero(result.p2_amplitude_input_units);
+    output["PQ_INTERVAL"] = numeric_or_zero(result.pr_interval_ms);
+    output["Q_DURATION"] = numeric_or_zero(result.q_duration_ms);
+    output["Q_AMPLITUDE"] = numeric_or_zero(result.q_amplitude_input_units);
+    output["R_DURATION"] = numeric_or_zero(result.r_duration_ms);
+    output["R_AMPLITUDE"] = numeric_or_zero(result.r_amplitude_input_units);
+    output["S_DURATION"] = numeric_or_zero(result.s_duration_ms);
+    output["S_AMPLITUDE"] = numeric_or_zero(result.s_amplitude_input_units);
+    output["QRS_DURATION"] = numeric_or_zero(result.qrs_duration_ms);
+    output["QT_INTERVAL"] = numeric_or_zero(result.qt_interval_ms);
+    output["J_AMPLITUDE"] = numeric_or_zero(result.j_point_amplitude_input_units);
+    output["ST_20_AMPLITUDE"] = numeric_or_zero(result.st20_amplitude_input_units);
+    output["ST_40_AMPLITUDE"] = numeric_or_zero(result.st40_amplitude_input_units);
+    output["ST_60_AMPLITUDE"] = numeric_or_zero(result.st60_amplitude_input_units);
+    output["ST_80_AMPLITUDE"] = numeric_or_zero(result.st80_amplitude_input_units);
+    output["T_AMPLITUDE"] = numeric_or_zero(result.t_amplitude_input_units);
 }
 
 std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double sampling_rate, std::string mode = "default")
@@ -107,14 +203,10 @@ std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double
     else
         cout << "Input ECG array must be 1 or 2-dimensional (samples x channels)" << endl;
 
-    std::vector<double> peak_signal(len), filt_signal(len), threshold_signal(len);
-    std::vector<unsigned int> peak_indexes;
+    std::vector<uint32_t> peak_indexes;
+    rspt::detect_peaks_double(ecg_signal.data(), len, sampling_rate, mode_to_c_api_value(mode), peak_indexes);
 
-    peak_detector_offline detector(sampling_rate);
-    set_detector_mode(detector, mode);
-    detector.detect(ecg_signal.data(), len, peak_signal.data(), filt_signal.data(), threshold_signal.data(), &peak_indexes);
-
-    return peak_indexes;
+    return std::vector<unsigned int>(peak_indexes.begin(), peak_indexes.end());
 }
 
 std::vector<unsigned int> detect_multichannel(py::array_t<double> ecg_signal_np, double sampling_rate, std::string mode = "default")
@@ -167,74 +259,65 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
     std::vector<const double*> data_ptrs;
     copy_ecg_signal_to_channels(ecg_signal_np, len, nr_channels, data, data_ptrs);
 
-    // 3) Analyse eredményének előkészítése
-    std::vector<pqrst_indxes> annotations;
-    ecg_analysis_result result = analyse_ecg_detect_peaks(data_ptrs.data(), nr_channels, len, sampling_rate, annotations, 0, mode, analysis_ch_indx, analysis_peak_indx);
+    std::vector<rspt_ecg_beat_result> results;
+    std::vector<uint32_t> peak_indexes;
+    int c_mode = mode_to_c_api_value(mode);
+    int32_t status = rspt::analyze_ecg_beats_double(
+        data_ptrs.data(),
+        nr_channels,
+        len,
+        sampling_rate,
+        analysis_ch_indx,
+        nullptr,
+        0,
+        c_mode,
+        results,
+        &peak_indexes);
+
+    rspt_ecg_summary_result summary;
+    rspt::analyze_ecg_summary_double(
+        data_ptrs.data(),
+        nr_channels,
+        len,
+        sampling_rate,
+        analysis_ch_indx,
+        peak_indexes.empty() ? nullptr : peak_indexes.data(),
+        peak_indexes.size(),
+        c_mode,
+        summary);
+
+    size_t selected_index = 0;
+    if (!results.empty())
+    {
+        if (analysis_peak_indx < 0)
+            selected_index = 0;
+        else if (static_cast<size_t>(analysis_peak_indx) >= results.size())
+            selected_index = results.size() - 1;
+        else
+            selected_index = static_cast<size_t>(analysis_peak_indx);
+    }
 
     py::list py_annotations;
-    for (const auto& ann : annotations)
-        py_annotations.append(annotation_to_dict(ann));
+    if (!results.empty())
+        py_annotations.append(annotation_to_dict(results[selected_index].annotation));
 
-    // 4) Eredmények Python dict-be töltése
     py::dict output;
     output["annotations"] = py_annotations;
-    output["rr_interval_ms"]       = result.rr_interval_ms;
-    output["rr_variation_ms"]      = result.rr_variation_ms;
-    output["heart_rate_bpm"]       = result.heart_rate_bpm;
-    output["pr_interval_ms"]       = result.pr_interval_ms;
-    output["pr_segment_ms"]        = result.pr_segment_ms;
-    output["qrs_duration_ms"]      = result.qrs_duration_ms;
-    output["qt_interval_ms"]       = result.qt_interval_ms;
-    output["qtc_bazett_ms"]        = result.qtc_bazett_ms;
-    output["qtc_interval_ms"]      = result.qtc_bazett_ms;
-    output["st_segment_ms"]        = result.st_segment_ms;
-    output["p_wave_duration_ms"]   = result.p_wave_duration_ms;
-    output["t_wave_duration_ms"]   = result.t_wave_duration_ms;
-    output["is_sinus_rhythm"]           = result.is_sinus_rhythm;
-    output["premature_beat_count"]      = result.premature_beat_count;
-    output["analysis_status"]           = result.analysis_status;
-    output["status_message"]            = std::string(result.status_message);
-
-    output["p1_wave_duration_ms"] = result.p1_wave_duration_ms;
-    output["p1_amplitude_input_units"] = result.p1_amplitude_input_units;
-    output["p2_wave_duration_ms"] = result.p2_wave_duration_ms;
-    output["p2_amplitude_input_units"] = result.p2_amplitude_input_units;
-    output["q_duration_ms"] = result.q_duration_ms;
-    output["q_amplitude_input_units"] = result.q_amplitude_input_units;
-    output["r_duration_ms"] = result.r_duration_ms;
-    output["r_amplitude_input_units"] = result.r_amplitude_input_units;
-    output["s_duration_ms"] = result.s_duration_ms;
-    output["s_amplitude_input_units"] = result.s_amplitude_input_units;
-    output["j_point_amplitude_input_units"] = result.j_point_amplitude_input_units;
-    output["st20_amplitude_input_units"] = result.st20_amplitude_input_units;
-    output["st40_amplitude_input_units"] = result.st40_amplitude_input_units;
-    output["st60_amplitude_input_units"] = result.st60_amplitude_input_units;
-    output["st80_amplitude_input_units"] = result.st80_amplitude_input_units;
-    output["t_amplitude_input_units"] = result.t_amplitude_input_units;
-
-    output["P1_DURATION"] = result.p1_wave_duration_ms;
-    output["P1_AMPLITUDE"] = result.p1_amplitude_input_units;
-    output["P2_DURATION"] = result.p2_wave_duration_ms;
-    output["P2_AMPLITUDE"] = result.p2_amplitude_input_units;
-
-    output["PQ_INTERVAL"] = result.pr_interval_ms;
-
-    output["Q_DURATION"] = result.q_duration_ms;
-    output["Q_AMPLITUDE"] = result.q_amplitude_input_units;
-    output["R_DURATION"] = result.r_duration_ms;
-    output["R_AMPLITUDE"] = result.r_amplitude_input_units;
-    output["S_DURATION"] = result.s_duration_ms;
-    output["S_AMPLITUDE"] = result.s_amplitude_input_units;
-
-    output["QRS_DURATION"] = result.qrs_duration_ms;
-    output["QT_INTERVAL"] = result.qt_interval_ms;
-
-    output["J_AMPLITUDE"] = result.j_point_amplitude_input_units;
-    output["ST_20_AMPLITUDE"] = result.st20_amplitude_input_units;
-    output["ST_40_AMPLITUDE"] = result.st40_amplitude_input_units;
-    output["ST_60_AMPLITUDE"] = result.st60_amplitude_input_units;
-    output["ST_80_AMPLITUDE"] = result.st80_amplitude_input_units;
-    output["T_AMPLITUDE"] = result.t_amplitude_input_units;
+    if (!results.empty())
+    {
+        const auto& result = results[selected_index];
+        add_standard_metric_fields(output, result, &summary);
+        output["is_sinus_rhythm"] = summary.is_sinus_rhythm >= 0 ? summary.is_sinus_rhythm : 0;
+        output["premature_beat_count"] = summary.premature_beat_count >= 0 ? summary.premature_beat_count : 0;
+        output["analysis_status"] = result.status;
+        output["status_message"] = std::string(result.status_message);
+        add_validation_metric_fields(output, result);
+    }
+    else
+    {
+        output["analysis_status"] = status;
+        output["status_message"] = std::string(rspt::status_message(status));
+    }
 
     return output;
 }
@@ -247,20 +330,19 @@ py::dict analyse_ecg_beats(py::array_t<double, py::array::c_style | py::array::f
     std::vector<const double*> data_ptrs;
     copy_ecg_signal_to_channels(ecg_signal_np, len, nr_channels, data, data_ptrs);
 
-    if (analysis_ch_indx < 0)
-        analysis_ch_indx = 0;
-    if (analysis_ch_indx >= static_cast<int>(nr_channels))
-        analysis_ch_indx = static_cast<int>(nr_channels) - 1;
-
-    std::vector<double> peak_signal(len), filt_signal(len), threshold_signal(len);
-    std::vector<unsigned int> peak_indexes;
-    peak_detector_offline detector(sampling_rate);
-    set_detector_mode(detector, mode);
-    detector.detect(data[analysis_ch_indx].data(), len, peak_signal.data(), filt_signal.data(), threshold_signal.data(), &peak_indexes);
-
-    std::vector<pqrst_indxes> annotations;
-    std::vector<ecg_analysis_result> results;
-    analyse_ecg_all_beats(data_ptrs.data(), nr_channels, len, sampling_rate, peak_indexes, annotations, results, analysis_ch_indx);
+    std::vector<rspt_ecg_beat_result> results;
+    std::vector<uint32_t> peak_indexes;
+    int32_t status = rspt::analyze_ecg_beats_double(
+        data_ptrs.data(),
+        nr_channels,
+        len,
+        sampling_rate,
+        analysis_ch_indx,
+        nullptr,
+        0,
+        mode_to_c_api_value(mode),
+        results,
+        &peak_indexes);
 
     py::list py_peak_indexes;
     for (const auto peak_index : peak_indexes)
@@ -277,78 +359,23 @@ py::dict analyse_ecg_beats(py::array_t<double, py::array::c_style | py::array::f
         else
             beat["r_peak_sample"] = py::none();
 
-        beat["analysis_channel_index"] = analysis_ch_indx;
-        beat["analysis_status"] = result.analysis_status;
+        beat["analysis_channel_index"] = result.analysis_channel_index;
+        beat["analysis_status"] = result.status;
         beat["status_message"] = std::string(result.status_message);
+        beat["annotation"] = annotation_to_dict(result.annotation);
 
-        if (i < annotations.size())
-            beat["annotation"] = annotation_to_dict(annotations[i]);
-        else
-            beat["annotation"] = py::none();
-
-        if (i > 0 && i < peak_indexes.size() && peak_indexes[i] > peak_indexes[i - 1])
-        {
-            double rr_ms = (peak_indexes[i] - peak_indexes[i - 1]) / sampling_rate * 1000.0;
-            beat["rr_interval_ms"] = rr_ms;
-            beat["heart_rate_bpm"] = (rr_ms > 0.0) ? 60000.0 / rr_ms : 0.0;
-        }
-        else
-        {
-            beat["rr_interval_ms"] = py::none();
-            beat["heart_rate_bpm"] = py::none();
-        }
-
-        beat["p_wave_duration_ms"] = result.p_wave_duration_ms;
-        beat["p1_wave_duration_ms"] = result.p1_wave_duration_ms;
-        beat["p1_amplitude_input_units"] = result.p1_amplitude_input_units;
-        beat["p2_wave_duration_ms"] = result.p2_wave_duration_ms;
-        beat["p2_amplitude_input_units"] = result.p2_amplitude_input_units;
-        beat["pr_interval_ms"] = result.pr_interval_ms;
-        beat["pr_segment_ms"] = result.pr_segment_ms;
-        beat["q_duration_ms"] = result.q_duration_ms;
-        beat["q_amplitude_input_units"] = result.q_amplitude_input_units;
-        beat["r_duration_ms"] = result.r_duration_ms;
-        beat["r_amplitude_input_units"] = result.r_amplitude_input_units;
-        beat["s_duration_ms"] = result.s_duration_ms;
-        beat["s_amplitude_input_units"] = result.s_amplitude_input_units;
-        beat["qrs_duration_ms"] = result.qrs_duration_ms;
-        beat["qt_interval_ms"] = result.qt_interval_ms;
-        beat["qtc_bazett_ms"] = result.qtc_bazett_ms;
-        beat["qtc_interval_ms"] = result.qtc_bazett_ms;
-        beat["st_segment_ms"] = result.st_segment_ms;
-        beat["t_wave_duration_ms"] = result.t_wave_duration_ms;
-        beat["j_point_amplitude_input_units"] = result.j_point_amplitude_input_units;
-        beat["st20_amplitude_input_units"] = result.st20_amplitude_input_units;
-        beat["st40_amplitude_input_units"] = result.st40_amplitude_input_units;
-        beat["st60_amplitude_input_units"] = result.st60_amplitude_input_units;
-        beat["st80_amplitude_input_units"] = result.st80_amplitude_input_units;
-        beat["t_amplitude_input_units"] = result.t_amplitude_input_units;
-
-        beat["P1_DURATION"] = result.p1_wave_duration_ms;
-        beat["P1_AMPLITUDE"] = result.p1_amplitude_input_units;
-        beat["P2_DURATION"] = result.p2_wave_duration_ms;
-        beat["P2_AMPLITUDE"] = result.p2_amplitude_input_units;
-        beat["PQ_INTERVAL"] = result.pr_interval_ms;
-        beat["Q_DURATION"] = result.q_duration_ms;
-        beat["Q_AMPLITUDE"] = result.q_amplitude_input_units;
-        beat["R_DURATION"] = result.r_duration_ms;
-        beat["R_AMPLITUDE"] = result.r_amplitude_input_units;
-        beat["S_DURATION"] = result.s_duration_ms;
-        beat["S_AMPLITUDE"] = result.s_amplitude_input_units;
-        beat["QRS_DURATION"] = result.qrs_duration_ms;
-        beat["QT_INTERVAL"] = result.qt_interval_ms;
-        beat["J_AMPLITUDE"] = result.j_point_amplitude_input_units;
-        beat["ST_20_AMPLITUDE"] = result.st20_amplitude_input_units;
-        beat["ST_40_AMPLITUDE"] = result.st40_amplitude_input_units;
-        beat["ST_60_AMPLITUDE"] = result.st60_amplitude_input_units;
-        beat["ST_80_AMPLITUDE"] = result.st80_amplitude_input_units;
-        beat["T_AMPLITUDE"] = result.t_amplitude_input_units;
+        add_standard_metric_fields(beat, result, nullptr);
+        add_validation_metric_fields(beat, result);
+        beat["rr_interval_ms"] = numeric_or_none(result.rr_interval_ms);
+        beat["heart_rate_bpm"] = numeric_or_none(result.heart_rate_bpm);
 
         py_beats.append(beat);
     }
 
     py::dict output;
-    output["analysis_channel_index"] = analysis_ch_indx;
+    output["analysis_channel_index"] = results.empty() ? analysis_ch_indx : static_cast<int>(results[0].analysis_channel_index);
+    output["analysis_status"] = status;
+    output["status_message"] = std::string(rspt::status_message(status));
     output["r_peak_indexes"] = py_peak_indexes;
     output["beats"] = py_beats;
     return output;

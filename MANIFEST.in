@@ -1,5 +1,6 @@
 include README.md
 include LICENSE
+recursive-include rspt_module *.h
 global-exclude *.pyc
 global-exclude __pycache__
 global-exclude .git*

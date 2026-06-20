@@ -2,73 +2,44 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <string>
 #include <vector>
 
-struct pqrst_indxes
+#include "rspt_types.h"
+
+namespace rspt
 {
-    int32_t p[6]; // p1_on, p1_peak, p1_off, p2_on, p2_peak, p2_off; p2 values are -1 when absent.
-    int32_t r[5]; // qrs_on, r_peak, qrs_off, q_peak, s_peak.
-    int32_t t[4]; // t_on, t_peak, t_off, j_point.
-};
 
-struct ecg_analysis_result
-{
-    int analysis_status;
-    char status_message[64];
+const char* status_message(int32_t status);
+uint32_t api_version();
 
-    double rr_interval_ms;
-    double rr_variation_ms;
-    double heart_rate_bpm;
-    int is_sinus_rhythm;
-    int premature_beat_count;
-
-    double p_wave_duration_ms;
-    double pr_interval_ms;
-    double pr_segment_ms;
-    double qrs_duration_ms;
-    double qt_interval_ms;
-    double qtc_bazett_ms;
-    double st_segment_ms;
-    double t_wave_duration_ms;
-
-    double p1_wave_duration_ms;
-    double p1_amplitude_input_units;
-    double p2_wave_duration_ms;
-    double p2_amplitude_input_units;
-
-    double q_duration_ms;
-    double q_amplitude_input_units;
-    double r_duration_ms;
-    double r_amplitude_input_units;
-    double s_duration_ms;
-    double s_amplitude_input_units;
-
-    double j_point_amplitude_input_units;
-    double st20_amplitude_input_units;
-    double st40_amplitude_input_units;
-    double st60_amplitude_input_units;
-    double st80_amplitude_input_units;
-    double t_amplitude_input_units;
-};
-
-ecg_analysis_result analyse_ecg_detect_peaks(
-    const double** data,
-    size_t nr_channels,
-    size_t nr_samples_per_channel,
+int32_t detect_peaks_double(
+    const double* signal,
+    size_t sample_count,
     double sampling_rate,
-    std::vector<pqrst_indxes>& annotations,
-    std::vector<unsigned int>* peak_indexes = nullptr,
-    std::string mode = "default",
-    int analysis_ch_indx = -1,
-    int analysis_peak_indx = 0);
+    int32_t mode,
+    std::vector<uint32_t>& out_r_peak_indexes);
 
-void analyse_ecg_all_beats(
-    const double** data,
-    size_t nr_channels,
-    size_t nr_samples_per_channel,
+int32_t analyze_ecg_beats_double(
+    const double* const* channels,
+    size_t channel_count,
+    size_t samples_per_channel,
     double sampling_rate,
-    const std::vector<unsigned int>& peak_indexes,
-    std::vector<pqrst_indxes>& annotations,
-    std::vector<ecg_analysis_result>& results,
-    int analysis_ch_indx = -1);
+    int32_t analysis_channel_index,
+    const uint32_t* r_peak_indexes,
+    size_t r_peak_count,
+    int32_t mode,
+    std::vector<rspt_ecg_beat_result>& out_beats,
+    std::vector<uint32_t>* out_detected_r_peak_indexes = nullptr);
+
+int32_t analyze_ecg_summary_double(
+    const double* const* channels,
+    size_t channel_count,
+    size_t samples_per_channel,
+    double sampling_rate,
+    int32_t analysis_channel_index,
+    const uint32_t* r_peak_indexes,
+    size_t r_peak_count,
+    int32_t mode,
+    rspt_ecg_summary_result& out_summary);
+
+}
