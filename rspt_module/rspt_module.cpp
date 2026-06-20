@@ -182,32 +182,33 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
     output["rr_variation_ms"]      = result.rr_variation_ms;
     output["heart_rate_bpm"]       = result.heart_rate_bpm;
     output["pr_interval_ms"]       = result.pr_interval_ms;
+    output["pr_segment_ms"]        = result.pr_segment_ms;
     output["qrs_duration_ms"]      = result.qrs_duration_ms;
     output["qt_interval_ms"]       = result.qt_interval_ms;
-    output["qtc_interval_ms"]      = result.qtc_interval_ms;
+    output["st_segment_ms"]        = result.st_segment_ms;
     output["p_wave_duration_ms"]   = result.p_wave_duration_ms;
     output["t_wave_duration_ms"]   = result.t_wave_duration_ms;
-
-    // Amplitúdók, 12 elvezetés sorrendjében
-    py::list r_peaks, s_waves, st_elev, st_depr;
-    for (int i = 0; i < 12; ++i)
-    {
-        r_peaks.append(result.r_peak_amplitude_input_units[i]);
-        s_waves.append(result.s_wave_amplitude_input_units[i]);
-        st_elev.append(result.st_elevation_input_units[i]);
-        st_depr.append(result.st_depression_input_units[i]);
-    }
-    output["r_peak_amplitude_mV"]   = r_peaks;
-    output["s_wave_amplitude_mV"]   = s_waves;
-    output["st_elevation_mV"]       = st_elev;
-    output["st_depression_mV"]      = st_depr;
-
-    output["frontal_plane_axis_deg"]    = result.frontal_plane_axis_deg;
-    output["horizontal_plane_axis_deg"] = result.horizontal_plane_axis_deg;
     output["is_sinus_rhythm"]           = result.is_sinus_rhythm;
     output["premature_beat_count"]      = result.premature_beat_count;
     output["analysis_status"]           = result.analysis_status;
     output["status_message"]            = std::string(result.status_message);
+
+    output["p1_wave_duration_ms"] = result.p1_wave_duration_ms;
+    output["p1_amplitude_input_units"] = result.p1_amplitude_input_units;
+    output["p2_wave_duration_ms"] = result.p2_wave_duration_ms;
+    output["p2_amplitude_input_units"] = result.p2_amplitude_input_units;
+    output["q_duration_ms"] = result.q_duration_ms;
+    output["q_amplitude_input_units"] = result.q_amplitude_input_units;
+    output["r_duration_ms"] = result.r_duration_ms;
+    output["r_amplitude_input_units"] = result.r_amplitude_input_units;
+    output["s_duration_ms"] = result.s_duration_ms;
+    output["s_amplitude_input_units"] = result.s_amplitude_input_units;
+    output["j_point_amplitude_input_units"] = result.j_point_amplitude_input_units;
+    output["st20_amplitude_input_units"] = result.st20_amplitude_input_units;
+    output["st40_amplitude_input_units"] = result.st40_amplitude_input_units;
+    output["st60_amplitude_input_units"] = result.st60_amplitude_input_units;
+    output["st80_amplitude_input_units"] = result.st80_amplitude_input_units;
+    output["t_amplitude_input_units"] = result.t_amplitude_input_units;
 
     output["P1_DURATION"] = result.p1_wave_duration_ms;
     output["P1_AMPLITUDE"] = result.p1_amplitude_input_units;
@@ -288,38 +289,36 @@ py::dict analyse_ecg_beats(py::array_t<double, py::array::c_style | py::array::f
             double rr_ms = (peak_indexes[i] - peak_indexes[i - 1]) / sampling_rate * 1000.0;
             beat["rr_interval_ms"] = rr_ms;
             beat["heart_rate_bpm"] = (rr_ms > 0.0) ? 60000.0 / rr_ms : 0.0;
-            if (rr_ms > 0.0 && result.qt_interval_ms > 0)
-            {
-                double qtc_ms = result.qt_interval_ms / std::sqrt(rr_ms / 1000.0);
-                beat["qtc_bazett_ms"] = qtc_ms;
-                beat["qtc_interval_ms"] = qtc_ms;
-            }
-            else
-            {
-                beat["qtc_bazett_ms"] = py::none();
-                beat["qtc_interval_ms"] = py::none();
-            }
         }
         else
         {
             beat["rr_interval_ms"] = py::none();
             beat["heart_rate_bpm"] = py::none();
-            beat["qtc_bazett_ms"] = py::none();
-            beat["qtc_interval_ms"] = py::none();
         }
 
-        if (i > 0 && i < annotations.size() && i - 1 < annotations.size() && annotations[i].p[1] >= 0 && annotations[i - 1].p[1] >= 0)
-            beat["pp_interval_ms"] = (annotations[i].p[1] - annotations[i - 1].p[1]) / sampling_rate * 1000.0;
-        else
-            beat["pp_interval_ms"] = py::none();
-
         beat["p_wave_duration_ms"] = result.p_wave_duration_ms;
+        beat["p1_wave_duration_ms"] = result.p1_wave_duration_ms;
+        beat["p1_amplitude_input_units"] = result.p1_amplitude_input_units;
+        beat["p2_wave_duration_ms"] = result.p2_wave_duration_ms;
+        beat["p2_amplitude_input_units"] = result.p2_amplitude_input_units;
         beat["pr_interval_ms"] = result.pr_interval_ms;
         beat["pr_segment_ms"] = result.pr_segment_ms;
+        beat["q_duration_ms"] = result.q_duration_ms;
+        beat["q_amplitude_input_units"] = result.q_amplitude_input_units;
+        beat["r_duration_ms"] = result.r_duration_ms;
+        beat["r_amplitude_input_units"] = result.r_amplitude_input_units;
+        beat["s_duration_ms"] = result.s_duration_ms;
+        beat["s_amplitude_input_units"] = result.s_amplitude_input_units;
         beat["qrs_duration_ms"] = result.qrs_duration_ms;
         beat["qt_interval_ms"] = result.qt_interval_ms;
         beat["st_segment_ms"] = result.st_segment_ms;
         beat["t_wave_duration_ms"] = result.t_wave_duration_ms;
+        beat["j_point_amplitude_input_units"] = result.j_point_amplitude_input_units;
+        beat["st20_amplitude_input_units"] = result.st20_amplitude_input_units;
+        beat["st40_amplitude_input_units"] = result.st40_amplitude_input_units;
+        beat["st60_amplitude_input_units"] = result.st60_amplitude_input_units;
+        beat["st80_amplitude_input_units"] = result.st80_amplitude_input_units;
+        beat["t_amplitude_input_units"] = result.t_amplitude_input_units;
 
         beat["P1_DURATION"] = result.p1_wave_duration_ms;
         beat["P1_AMPLITUDE"] = result.p1_amplitude_input_units;

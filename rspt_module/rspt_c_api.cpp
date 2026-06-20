@@ -111,7 +111,6 @@ void initialise_beat_result(rspt_ecg_beat_result& result)
     result.p2_amplitude_input_units = missing_value();
     result.pr_interval_ms = missing_value();
     result.pr_segment_ms = missing_value();
-    result.pp_interval_ms = missing_value();
     result.q_duration_ms = missing_value();
     result.q_amplitude_input_units = missing_value();
     result.r_duration_ms = missing_value();
@@ -120,7 +119,6 @@ void initialise_beat_result(rspt_ecg_beat_result& result)
     result.s_amplitude_input_units = missing_value();
     result.qrs_duration_ms = missing_value();
     result.qt_interval_ms = missing_value();
-    result.qtc_bazett_ms = missing_value();
     result.st_segment_ms = missing_value();
     result.t_wave_duration_ms = missing_value();
     result.j_point_amplitude_input_units = missing_value();
@@ -144,7 +142,6 @@ void initialise_summary_result(rspt_ecg_summary_result& result)
     result.mean_pr_interval_ms = missing_value();
     result.mean_qrs_duration_ms = missing_value();
     result.mean_qt_interval_ms = missing_value();
-    result.mean_qtc_bazett_ms = missing_value();
     result.mean_st_segment_ms = missing_value();
     result.mean_t_wave_duration_ms = missing_value();
     result.is_sinus_rhythm = -1;
@@ -321,7 +318,6 @@ bool rr_interval_ms_for_index(
 
 void fill_beat_result(
     const ecg_analysis_result& core_result,
-    const pqrst_indxes* previous_annotation,
     const pqrst_indxes* annotation,
     const std::vector<unsigned int>& peak_indexes,
     size_t beat_index,
@@ -382,21 +378,6 @@ void fill_beat_result(
         output.rr_interval_ms = previous_rr_ms;
         output.heart_rate_bpm = 60000.0 / previous_rr_ms;
         output.valid_fields |= RSPT_VALID_RR_INTERVAL_MS | RSPT_VALID_HEART_RATE_BPM;
-
-        if (positive_finite(output.qt_interval_ms))
-        {
-            output.qtc_bazett_ms = output.qt_interval_ms / std::sqrt(previous_rr_ms / 1000.0);
-            output.valid_fields |= RSPT_VALID_QTC_BAZETT_MS;
-        }
-    }
-
-    if (previous_annotation && annotation &&
-        previous_annotation->p[1] >= 0 &&
-        annotation->p[1] >= 0 &&
-        annotation->p[1] > previous_annotation->p[1])
-    {
-        output.pp_interval_ms = (annotation->p[1] - previous_annotation->p[1]) / sampling_rate * 1000.0;
-        output.valid_fields |= RSPT_VALID_PP_INTERVAL_MS;
     }
 }
 
@@ -447,7 +428,7 @@ const char* rspt_status_message(int32_t status)
 
 uint32_t rspt_c_api_version(void)
 {
-    return 2;
+    return 3;
 }
 
 int32_t rspt_detect_peaks_double(
@@ -539,11 +520,9 @@ int32_t rspt_analyse_ecg_beats_double(
     {
         for (size_t i = 0; i < analysis.results.size(); ++i)
         {
-            const pqrst_indxes* previous_annotation = (i > 0 && i - 1 < analysis.annotations.size()) ? &analysis.annotations[i - 1] : nullptr;
             const pqrst_indxes* annotation = (i < analysis.annotations.size()) ? &analysis.annotations[i] : nullptr;
             fill_beat_result(
                 analysis.results[i],
-                previous_annotation,
                 annotation,
                 analysis.peak_indexes,
                 i,
@@ -634,8 +613,8 @@ int32_t rspt_analyse_ecg_summary_double(
         }
     }
 
-    double p_sum = 0.0, pr_sum = 0.0, qrs_sum = 0.0, qt_sum = 0.0, qtc_sum = 0.0, st_sum = 0.0, t_sum = 0.0;
-    size_t p_count = 0, pr_count = 0, qrs_count = 0, qt_count = 0, qtc_count = 0, st_count = 0, t_count = 0;
+    double p_sum = 0.0, pr_sum = 0.0, qrs_sum = 0.0, qt_sum = 0.0, st_sum = 0.0, t_sum = 0.0;
+    size_t p_count = 0, pr_count = 0, qrs_count = 0, qt_count = 0, st_count = 0, t_count = 0;
     int32_t first_failure_status = RSPT_STATUS_OK;
 
     for (size_t i = 0; i < analysis.results.size(); ++i)
@@ -650,11 +629,9 @@ int32_t rspt_analyse_ecg_summary_double(
         ++out_summary->analysed_beat_count;
 
         rspt_ecg_beat_result beat;
-        const pqrst_indxes* previous_annotation = (i > 0 && i - 1 < analysis.annotations.size()) ? &analysis.annotations[i - 1] : nullptr;
         const pqrst_indxes* annotation = (i < analysis.annotations.size()) ? &analysis.annotations[i] : nullptr;
         fill_beat_result(
             analysis.results[i],
-            previous_annotation,
             annotation,
             analysis.peak_indexes,
             i,
@@ -666,7 +643,6 @@ int32_t rspt_analyse_ecg_summary_double(
         add_to_mean(beat.pr_interval_ms, pr_sum, pr_count);
         add_to_mean(beat.qrs_duration_ms, qrs_sum, qrs_count);
         add_to_mean(beat.qt_interval_ms, qt_sum, qt_count);
-        add_to_mean(beat.qtc_bazett_ms, qtc_sum, qtc_count);
         add_to_mean(beat.st_segment_ms, st_sum, st_count);
         add_to_mean(beat.t_wave_duration_ms, t_sum, t_count);
     }
@@ -682,7 +658,6 @@ int32_t rspt_analyse_ecg_summary_double(
     set_mean(pr_sum, pr_count, out_summary->mean_pr_interval_ms, out_summary->valid_fields, RSPT_VALID_PR_INTERVAL_MS);
     set_mean(qrs_sum, qrs_count, out_summary->mean_qrs_duration_ms, out_summary->valid_fields, RSPT_VALID_QRS_DURATION_MS);
     set_mean(qt_sum, qt_count, out_summary->mean_qt_interval_ms, out_summary->valid_fields, RSPT_VALID_QT_INTERVAL_MS);
-    set_mean(qtc_sum, qtc_count, out_summary->mean_qtc_bazett_ms, out_summary->valid_fields, RSPT_VALID_QTC_BAZETT_MS);
     set_mean(st_sum, st_count, out_summary->mean_st_segment_ms, out_summary->valid_fields, RSPT_VALID_ST_SEGMENT_MS);
     set_mean(t_sum, t_count, out_summary->mean_t_wave_duration_ms, out_summary->valid_fields, RSPT_VALID_T_WAVE_DURATION_MS);
 

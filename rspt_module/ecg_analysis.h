@@ -28,7 +28,6 @@ struct ecg_analysis_result
     double pr_segment_ms;
     double qrs_duration_ms;
     double qt_interval_ms;
-    double qtc_interval_ms;
     double st_segment_ms;
     double t_wave_duration_ms;
 
@@ -50,14 +49,6 @@ struct ecg_analysis_result
     double st60_amplitude_input_units;
     double st80_amplitude_input_units;
     double t_amplitude_input_units;
-
-    double r_peak_amplitude_input_units[12];
-    double s_wave_amplitude_input_units[12];
-    double st_elevation_input_units[12];
-    double st_depression_input_units[12];
-
-    double frontal_plane_axis_deg;
-    double horizontal_plane_axis_deg;
 };
 
 ecg_analysis_result analyse_ecg_detect_peaks(
