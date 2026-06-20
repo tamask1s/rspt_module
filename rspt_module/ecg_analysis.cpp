@@ -844,6 +844,8 @@ static void fill_legacy_fields(ecg_analysis_result& result, double sampling_rate
     }
 
     result.pr_segment_ms = result.pr_interval_ms - result.p_wave_duration_ms;
+    double rr_sec = result.rr_interval_ms / 1000.0;
+    result.qtc_bazett_ms = (rr_sec > 0.0 && result.qt_interval_ms > 0.0) ? result.qt_interval_ms / std::sqrt(rr_sec) : 0.0;
 
     /* ---- T wave duration & ST segment from annotations ---- */
     if (!annotations.empty())

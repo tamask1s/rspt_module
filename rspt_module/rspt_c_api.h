@@ -41,9 +41,10 @@ typedef enum rspt_detection_mode {
 #define RSPT_VALID_PR_SEGMENT_MS             (1ULL << 5)
 #define RSPT_VALID_QRS_DURATION_MS           (1ULL << 6)
 #define RSPT_VALID_QT_INTERVAL_MS            (1ULL << 7)
-#define RSPT_VALID_ST_SEGMENT_MS             (1ULL << 8)
-#define RSPT_VALID_T_WAVE_DURATION_MS        (1ULL << 9)
-#define RSPT_VALID_PQRS_T_ANNOTATION         (1ULL << 10)
+#define RSPT_VALID_QTC_BAZETT_MS             (1ULL << 8)
+#define RSPT_VALID_ST_SEGMENT_MS             (1ULL << 9)
+#define RSPT_VALID_T_WAVE_DURATION_MS        (1ULL << 10)
+#define RSPT_VALID_PQRS_T_ANNOTATION         (1ULL << 11)
 
 typedef struct rspt_pqrst_annotation {
     int32_t p1_onset_sample;
@@ -94,6 +95,7 @@ typedef struct rspt_ecg_beat_result {
     double s_amplitude_input_units;
     double qrs_duration_ms;
     double qt_interval_ms;
+    double qtc_bazett_ms;
     double st_segment_ms;
     double t_wave_duration_ms;
 
@@ -121,6 +123,7 @@ typedef struct rspt_ecg_summary_result {
     double mean_pr_interval_ms;
     double mean_qrs_duration_ms;
     double mean_qt_interval_ms;
+    double mean_qtc_bazett_ms;
     double mean_st_segment_ms;
     double mean_t_wave_duration_ms;
 

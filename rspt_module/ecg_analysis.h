@@ -28,6 +28,7 @@ struct ecg_analysis_result
     double pr_segment_ms;
     double qrs_duration_ms;
     double qt_interval_ms;
+    double qtc_bazett_ms;
     double st_segment_ms;
     double t_wave_duration_ms;
 

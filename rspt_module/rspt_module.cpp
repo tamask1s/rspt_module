@@ -185,6 +185,8 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
     output["pr_segment_ms"]        = result.pr_segment_ms;
     output["qrs_duration_ms"]      = result.qrs_duration_ms;
     output["qt_interval_ms"]       = result.qt_interval_ms;
+    output["qtc_bazett_ms"]        = result.qtc_bazett_ms;
+    output["qtc_interval_ms"]      = result.qtc_bazett_ms;
     output["st_segment_ms"]        = result.st_segment_ms;
     output["p_wave_duration_ms"]   = result.p_wave_duration_ms;
     output["t_wave_duration_ms"]   = result.t_wave_duration_ms;
@@ -311,6 +313,8 @@ py::dict analyse_ecg_beats(py::array_t<double, py::array::c_style | py::array::f
         beat["s_amplitude_input_units"] = result.s_amplitude_input_units;
         beat["qrs_duration_ms"] = result.qrs_duration_ms;
         beat["qt_interval_ms"] = result.qt_interval_ms;
+        beat["qtc_bazett_ms"] = result.qtc_bazett_ms;
+        beat["qtc_interval_ms"] = result.qtc_bazett_ms;
         beat["st_segment_ms"] = result.st_segment_ms;
         beat["t_wave_duration_ms"] = result.t_wave_duration_ms;
         beat["j_point_amplitude_input_units"] = result.j_point_amplitude_input_units;
