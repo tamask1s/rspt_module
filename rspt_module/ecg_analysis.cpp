@@ -157,38 +157,38 @@ struct ecg_analysis_config
     } bias;
 };
 
-void write_binmx_to_file(const char* filename, const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate)
-{
-    FILE* f = fopen(filename, "wb");
-    if (!f)
-    {
-        //perror("fopen");
-        return;
-    }
-
-    // --- HEADER --- 0–7: sampling rate
-    fwrite(&sampling_rate, sizeof(double), 1, f);
-
-    // 8–11: nr_channels (int32)
-    int32_t ch = (int32_t)nr_channels;
-    fwrite(&ch, sizeof(int32_t), 1, f);
-
-    // 12–23: padding (zeros)
-    uint8_t padding[12] = {0};
-    fwrite(padding, sizeof(padding), 1, f);
-
-    // --- DATA --- interleaved: ch0_s0, ch1_s0, ..., chN_s0, ch0_s1, ...
-    for (size_t s = 0; s < nr_samples_per_channel; ++s)
-    {
-        for (size_t c = 0; c < nr_channels; ++c)
-        {
-            double value = data[c][s];
-            fwrite(&value, sizeof(double), 1, f);
-        }
-    }
-
-    fclose(f);
-}
+// void write_binmx_to_file(const char* filename, const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate)
+// {
+//     FILE* f = fopen(filename, "wb");
+//     if (!f)
+//     {
+//         //perror("fopen");
+//         return;
+//     }
+//
+//     // --- HEADER --- 0-7: sampling rate
+//     fwrite(&sampling_rate, sizeof(double), 1, f);
+//
+//     // 8-11: nr_channels (int32)
+//     int32_t ch = (int32_t)nr_channels;
+//     fwrite(&ch, sizeof(int32_t), 1, f);
+//
+//     // 12-23: padding (zeros)
+//     uint8_t padding[12] = {0};
+//     fwrite(padding, sizeof(padding), 1, f);
+//
+//     // --- DATA --- interleaved: ch0_s0, ch1_s0, ..., chN_s0, ch0_s1, ...
+//     for (size_t s = 0; s < nr_samples_per_channel; ++s)
+//     {
+//         for (size_t c = 0; c < nr_channels; ++c)
+//         {
+//             double value = data[c][s];
+//             fwrite(&value, sizeof(double), 1, f);
+//         }
+//     }
+//
+//     fclose(f);
+// }
 
 double median(const double* data, int len)
 {
@@ -374,8 +374,8 @@ void search_isoel_bounds(double* signal, int len, double fs, int peak_indx, doub
     //double signal_baseline = median(&signal[0], len);
     double max_allowed_dev = /*deriv_baseline + */ min_val + qrs_amp * isoel_tolerance;
 
-    vector<double> baselinev(len, max_allowed_dev);
-    write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&baselinev, 1, len, fs);
+    //vector<double> baselinev(len, max_allowed_dev);
+    //write_binmx_to_file("c:/Tamas/test002.bin", (const double**)&baselinev, 1, len, fs);
 
     /** climb down from the peak to left and right, skipping the middle nr_perimeter_samples * 2 */
     double max_allowed_dev_orig = max_allowed_dev;
@@ -422,7 +422,7 @@ repeat_r:
     if (isoel_r == -1)
         isoel_r = std::max(0, std::min(len - 1, (int)(peak_indx + nr_perimeter_samples * 1.0)));
 
-    write_binmx_to_file("c:/Tamas/test003.bin", (const double**)&deriv, 1, len, fs);
+    //write_binmx_to_file("c:/Tamas/test003.bin", (const double**)&deriv, 1, len, fs);
 
     if (extend_mode == 0) /** case for QRS - shrink the complex */
     {
@@ -527,8 +527,8 @@ inline void find_wave_bounds(const double* signal, int peak_idx, int left_limit,
 void fill_wave_measurements(double* signal, int len, pqrst_indxes& a, double fs, const ecg_analysis_config& c, ecg_analysis_result& result)
 {
     double baseline = median(signal, len);
-    vector<double> baselinev(len, baseline);
-    write_binmx_to_file("c:/Tamas/test004.bin", (const double**)&baselinev, 1, len, fs);
+    //vector<double> baselinev(len, baseline);
+    //write_binmx_to_file("c:/Tamas/test004.bin", (const double**)&baselinev, 1, len, fs);
 
     /* ================= P WAVES ================= */
     int overall_p_end = a.p[2];
@@ -707,7 +707,7 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
     {
         result.analysis_status = 1;
         std::snprintf(result.status_message, sizeof(result.status_message), "No R peaks found");
-        cout << "!!! WARNING !!!: No R peaks found" << endl;
+        ///cout << "!!! WARNING !!!: No R peaks found" << endl;
         return;
     }
 
@@ -762,7 +762,7 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
 
     if (c.artifact.enable_artifact_removal)
         remove_artifacts(lead_cpy, nr_samples_per_ch, sampling_rate, c.artifact);
-    write_binmx_to_file("c:/Tamas/test001.bin", (const double**)&lead_cpy, 1, nr_samples_per_ch, sampling_rate);
+    //write_binmx_to_file("c:/Tamas/test001.bin", (const double**)&lead_cpy, 1, nr_samples_per_ch, sampling_rate);
 
     int isoel_start = -1, isoel_r = -1;
     search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_indexes[analysis_peak_indx], c.isoel.qrs_max_search_ms, c.isoel.qrs_dt_ms, c.isoel.qrs_perimeter_ms, isoel_start, isoel_r, c, c.isoel.qrs_isoel_tolerance, c.isoel.qrs_extend_mode);
@@ -1096,6 +1096,8 @@ void initialise_beat_result(rspt_ecg_beat_result& result)
     result.p2_amplitude_input_units = missing_value();
     result.pr_interval_ms = missing_value();
     result.pr_segment_ms = missing_value();
+    result.pp_interval_ms = missing_value();
+    result.p_peak_to_end_interval_ms = missing_value();
     result.q_duration_ms = missing_value();
     result.q_amplitude_input_units = missing_value();
     result.r_duration_ms = missing_value();
@@ -1105,8 +1107,10 @@ void initialise_beat_result(rspt_ecg_beat_result& result)
     result.qrs_duration_ms = missing_value();
     result.qt_interval_ms = missing_value();
     result.qtc_bazett_ms = missing_value();
+    result.qt_dispersion_ms = missing_value();
     result.st_segment_ms = missing_value();
     result.t_wave_duration_ms = missing_value();
+    result.t_peak_to_end_interval_ms = missing_value();
     result.j_point_amplitude_input_units = missing_value();
     result.st20_amplitude_input_units = missing_value();
     result.st40_amplitude_input_units = missing_value();
@@ -1133,11 +1137,15 @@ void initialise_summary_result(rspt_ecg_summary_result& result)
     initialise_metric_statistics(result.heart_rate_bpm);
     initialise_metric_statistics(result.p_wave_duration_ms);
     initialise_metric_statistics(result.pr_interval_ms);
+    initialise_metric_statistics(result.pp_interval_ms);
+    initialise_metric_statistics(result.p_peak_to_end_interval_ms);
     initialise_metric_statistics(result.qrs_duration_ms);
     initialise_metric_statistics(result.qt_interval_ms);
     initialise_metric_statistics(result.qtc_bazett_ms);
+    initialise_metric_statistics(result.qt_dispersion_ms);
     initialise_metric_statistics(result.st_segment_ms);
     initialise_metric_statistics(result.t_wave_duration_ms);
+    initialise_metric_statistics(result.t_peak_to_end_interval_ms);
     result.is_sinus_rhythm = -1;
     result.premature_beat_count = -1;
 }
@@ -1184,7 +1192,55 @@ struct AnalysisData
     std::vector<unsigned int> peak_indexes;
     std::vector<pqrst_indxes> annotations;
     std::vector<ecg_analysis_result> results;
+    std::vector<double> qt_dispersion_ms;
 };
+
+std::vector<double> calculate_qt_dispersion_by_beat(
+    const double* const* channels,
+    size_t channel_count,
+    size_t samples_per_channel,
+    double sampling_rate,
+    const std::vector<unsigned int>& peak_indexes)
+{
+    std::vector<double> dispersion(peak_indexes.size(), missing_value());
+    if (channel_count < 2)
+        return dispersion;
+
+    ecg_analysis_config c;
+    for (size_t beat_index = 0; beat_index < peak_indexes.size(); ++beat_index)
+    {
+        std::vector<double> qt_values;
+        qt_values.reserve(channel_count);
+        for (size_t channel = 0; channel < channel_count; ++channel)
+        {
+            std::vector<pqrst_indxes> beat_annotations;
+            ecg_analysis_result beat_result = {};
+            analyse_ecg(
+                (double**)channels,
+                static_cast<unsigned int>(channel_count),
+                static_cast<unsigned int>(samples_per_channel),
+                sampling_rate,
+                peak_indexes,
+                beat_annotations,
+                beat_result,
+                c,
+                static_cast<unsigned int>(channel),
+                static_cast<int>(beat_index));
+
+            fill_legacy_fields(beat_result, sampling_rate, peak_indexes, beat_annotations);
+            if (beat_result.analysis_status == RSPT_STATUS_OK && positive_finite(beat_result.qt_interval_ms))
+                qt_values.push_back(beat_result.qt_interval_ms);
+        }
+
+        if (qt_values.size() >= 2)
+        {
+            const auto minmax = std::minmax_element(qt_values.begin(), qt_values.end());
+            dispersion[beat_index] = *minmax.second - *minmax.first;
+        }
+    }
+
+    return dispersion;
+}
 
 int32_t run_core_analysis(
     const double* const* channels,
@@ -1259,6 +1315,12 @@ int32_t run_core_analysis(
         analysis.annotations,
         analysis.results,
         analysis.analysis_channel_index);
+    analysis.qt_dispersion_ms = calculate_qt_dispersion_by_beat(
+        channel_ptrs.data(),
+        channel_count,
+        samples_per_channel,
+        sampling_rate,
+        analysis.peak_indexes);
 
     return RSPT_STATUS_OK;
 }
@@ -1314,8 +1376,9 @@ bool rr_interval_ms_for_index(
 
 void fill_beat_result(
     const ecg_analysis_result& core_result,
-    const pqrst_indxes* annotation,
+    const std::vector<pqrst_indxes>& annotations,
     const std::vector<unsigned int>& peak_indexes,
+    const std::vector<double>& qt_dispersion_ms,
     size_t beat_index,
     double sampling_rate,
     uint32_t analysis_channel_index,
@@ -1337,8 +1400,34 @@ void fill_beat_result(
     if (core_result.analysis_status != RSPT_STATUS_OK)
         return;
 
+    const pqrst_indxes* annotation = (beat_index < annotations.size()) ? &annotations[beat_index] : nullptr;
     if (annotation)
+    {
         copy_annotation(*annotation, output.annotation, output.valid_fields);
+
+        int p_end_sample = annotation->p[5] >= 0 ? annotation->p[5] : annotation->p[2];
+        if (annotation->p[1] >= 0 && p_end_sample >= annotation->p[1])
+        {
+            output.p_peak_to_end_interval_ms = (p_end_sample - annotation->p[1]) / sampling_rate * 1000.0;
+            output.valid_fields |= RSPT_VALID_P_PEAK_TO_END_INTERVAL_MS;
+        }
+
+        if (annotation->t[1] >= 0 && annotation->t[2] >= annotation->t[1])
+        {
+            output.t_peak_to_end_interval_ms = (annotation->t[2] - annotation->t[1]) / sampling_rate * 1000.0;
+            output.valid_fields |= RSPT_VALID_T_PEAK_TO_END_INTERVAL_MS;
+        }
+
+        if (beat_index > 0 && beat_index < annotations.size())
+        {
+            const pqrst_indxes& previous = annotations[beat_index - 1];
+            if (previous.p[1] >= 0 && annotation->p[1] > previous.p[1])
+            {
+                output.pp_interval_ms = (annotation->p[1] - previous.p[1]) / sampling_rate * 1000.0;
+                output.valid_fields |= RSPT_VALID_PP_INTERVAL_MS;
+            }
+        }
+    }
 
     set_if_positive(core_result.p_wave_duration_ms, output.p_wave_duration_ms, output.valid_fields, RSPT_VALID_P_WAVE_DURATION_MS);
     output.p1_wave_duration_ms = core_result.p1_wave_duration_ms;
@@ -1358,6 +1447,8 @@ void fill_beat_result(
 
     set_if_positive(core_result.qrs_duration_ms, output.qrs_duration_ms, output.valid_fields, RSPT_VALID_QRS_DURATION_MS);
     set_if_positive(core_result.qt_interval_ms, output.qt_interval_ms, output.valid_fields, RSPT_VALID_QT_INTERVAL_MS);
+    if (beat_index < qt_dispersion_ms.size())
+        set_if_non_negative(qt_dispersion_ms[beat_index], output.qt_dispersion_ms, output.valid_fields, RSPT_VALID_QT_DISPERSION_MS);
     set_if_non_negative(core_result.st_segment_ms, output.st_segment_ms, output.valid_fields, RSPT_VALID_ST_SEGMENT_MS);
     set_if_positive(core_result.t_wave_duration_ms, output.t_wave_duration_ms, output.valid_fields, RSPT_VALID_T_WAVE_DURATION_MS);
 
@@ -1385,6 +1476,12 @@ void fill_beat_result(
 void add_to_stats(double value, std::vector<double>& values)
 {
     if (positive_finite(value))
+        values.push_back(value);
+}
+
+void add_non_negative_to_stats(double value, std::vector<double>& values)
+{
+    if (non_negative_finite(value))
         values.push_back(value);
 }
 
@@ -1436,7 +1533,7 @@ const char* status_message(int32_t status)
 
 uint32_t api_version()
 {
-    return 4;
+    return 5;
 }
 
 int32_t detect_peaks_double(
@@ -1497,11 +1594,11 @@ int32_t analyze_ecg_beats_double(
     out_beats.resize(analysis.results.size());
     for (size_t i = 0; i < analysis.results.size(); ++i)
     {
-        const pqrst_indxes* annotation = (i < analysis.annotations.size()) ? &analysis.annotations[i] : nullptr;
         fill_beat_result(
             analysis.results[i],
-            annotation,
+            analysis.annotations,
             analysis.peak_indexes,
+            analysis.qt_dispersion_ms,
             i,
             sampling_rate,
             static_cast<uint32_t>(analysis.analysis_channel_index),
@@ -1548,7 +1645,8 @@ int32_t analyze_ecg_summary_double(
 
     out_summary.analysed_beat_count = 0;
     int32_t first_failure_status = RSPT_STATUS_OK;
-    std::vector<double> rr_values, hr_values, p_values, pr_values, qrs_values, qt_values, qtc_values, st_values, t_values;
+    std::vector<double> rr_values, hr_values, p_values, pr_values, pp_values, p_peak_to_end_values;
+    std::vector<double> qrs_values, qt_values, qtc_values, qt_dispersion_values, st_values, t_values, t_peak_to_end_values;
     double rr_min = std::numeric_limits<double>::max();
     double rr_max = 0.0;
 
@@ -1573,11 +1671,15 @@ int32_t analyze_ecg_summary_double(
         add_to_stats(beat.heart_rate_bpm, hr_values);
         add_to_stats(beat.p_wave_duration_ms, p_values);
         add_to_stats(beat.pr_interval_ms, pr_values);
+        add_to_stats(beat.pp_interval_ms, pp_values);
+        add_to_stats(beat.p_peak_to_end_interval_ms, p_peak_to_end_values);
         add_to_stats(beat.qrs_duration_ms, qrs_values);
         add_to_stats(beat.qt_interval_ms, qt_values);
         add_to_stats(beat.qtc_bazett_ms, qtc_values);
+        add_non_negative_to_stats(beat.qt_dispersion_ms, qt_dispersion_values);
         add_to_stats(beat.st_segment_ms, st_values);
         add_to_stats(beat.t_wave_duration_ms, t_values);
+        add_to_stats(beat.t_peak_to_end_interval_ms, t_peak_to_end_values);
     }
 
     if (out_summary.analysed_beat_count == 0)
@@ -1591,11 +1693,15 @@ int32_t analyze_ecg_summary_double(
     set_stats(hr_values, out_summary.heart_rate_bpm, out_summary.valid_fields, RSPT_VALID_HEART_RATE_BPM);
     set_stats(p_values, out_summary.p_wave_duration_ms, out_summary.valid_fields, RSPT_VALID_P_WAVE_DURATION_MS);
     set_stats(pr_values, out_summary.pr_interval_ms, out_summary.valid_fields, RSPT_VALID_PR_INTERVAL_MS);
+    set_stats(pp_values, out_summary.pp_interval_ms, out_summary.valid_fields, RSPT_VALID_PP_INTERVAL_MS);
+    set_stats(p_peak_to_end_values, out_summary.p_peak_to_end_interval_ms, out_summary.valid_fields, RSPT_VALID_P_PEAK_TO_END_INTERVAL_MS);
     set_stats(qrs_values, out_summary.qrs_duration_ms, out_summary.valid_fields, RSPT_VALID_QRS_DURATION_MS);
     set_stats(qt_values, out_summary.qt_interval_ms, out_summary.valid_fields, RSPT_VALID_QT_INTERVAL_MS);
     set_stats(qtc_values, out_summary.qtc_bazett_ms, out_summary.valid_fields, RSPT_VALID_QTC_BAZETT_MS);
+    set_stats(qt_dispersion_values, out_summary.qt_dispersion_ms, out_summary.valid_fields, RSPT_VALID_QT_DISPERSION_MS);
     set_stats(st_values, out_summary.st_segment_ms, out_summary.valid_fields, RSPT_VALID_ST_SEGMENT_MS);
     set_stats(t_values, out_summary.t_wave_duration_ms, out_summary.valid_fields, RSPT_VALID_T_WAVE_DURATION_MS);
+    set_stats(t_peak_to_end_values, out_summary.t_peak_to_end_interval_ms, out_summary.valid_fields, RSPT_VALID_T_PEAK_TO_END_INTERVAL_MS);
 
     if (!rr_values.empty())
     {

@@ -130,13 +130,17 @@ static void add_standard_metric_fields(py::dict& output, const rspt_ecg_beat_res
     output["heart_rate_bpm"]       = summary ? numeric_or_zero(summary->heart_rate_bpm.mean) : numeric_or_zero(result.heart_rate_bpm);
     output["pr_interval_ms"]       = numeric_or_zero(result.pr_interval_ms);
     output["pr_segment_ms"]        = numeric_or_zero(result.pr_segment_ms);
+    output["pp_interval_ms"]       = summary ? numeric_or_zero(summary->pp_interval_ms.mean) : numeric_or_zero(result.pp_interval_ms);
+    output["p_peak_to_end_interval_ms"] = summary ? numeric_or_zero(summary->p_peak_to_end_interval_ms.mean) : numeric_or_zero(result.p_peak_to_end_interval_ms);
     output["qrs_duration_ms"]      = numeric_or_zero(result.qrs_duration_ms);
     output["qt_interval_ms"]       = numeric_or_zero(result.qt_interval_ms);
     output["qtc_bazett_ms"]        = numeric_or_zero(qtc_bazett_ms);
     output["qtc_interval_ms"]      = numeric_or_zero(qtc_bazett_ms);
+    output["qt_dispersion_ms"]     = summary ? numeric_or_zero(summary->qt_dispersion_ms.mean) : numeric_or_zero(result.qt_dispersion_ms);
     output["st_segment_ms"]        = numeric_or_zero(result.st_segment_ms);
     output["p_wave_duration_ms"]   = numeric_or_zero(result.p_wave_duration_ms);
     output["t_wave_duration_ms"]   = numeric_or_zero(result.t_wave_duration_ms);
+    output["t_peak_to_end_interval_ms"] = summary ? numeric_or_zero(summary->t_peak_to_end_interval_ms.mean) : numeric_or_zero(result.t_peak_to_end_interval_ms);
 }
 
 static void add_validation_metric_fields(py::dict& output, const rspt_ecg_beat_result& result)
@@ -200,9 +204,8 @@ std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double
             ecg_signal[i] /= (double)nr_channels;
         }
     }
-    else
-        cout << "Input ECG array must be 1 or 2-dimensional (samples x channels)" << endl;
 
+    ///cout << "Input ECG array must be 1 or 2-dimensional (samples x channels)" << endl;
     std::vector<uint32_t> peak_indexes;
     rspt::detect_peaks_double(ecg_signal.data(), len, sampling_rate, mode_to_c_api_value(mode), peak_indexes);
 
