@@ -19,56 +19,33 @@ extern "C" {
 RSPT_API const char* rspt_status_message(int32_t status);
 RSPT_API uint32_t rspt_api_version(void);
 
-RSPT_API int32_t rspt_detect_peaks_double(
+RSPT_API int32_t rspt_detect_peaks(
     const double* signal,
     size_t sample_count,
     double sampling_rate,
-    int32_t mode,
+    rspt_detection_mode peak_detection_mode,
     uint32_t* out_r_peak_indexes,
     size_t r_peak_capacity,
     size_t* out_r_peak_count);
 
-RSPT_API int32_t rspt_analyze_ecg_beats_double(
+RSPT_API int32_t rspt_analyze_ecg(
     const double* const* channels,
     size_t channel_count,
     size_t samples_per_channel,
     double sampling_rate,
+    rspt_ecg_beat_result* out_beat_results,
+    size_t beat_result_capacity,
+    size_t* out_beat_result_count,
+    rspt_ecg_summary_result* out_summary,
     int32_t analysis_channel_index,
-    const uint32_t* r_peak_indexes,
-    size_t r_peak_count,
-    int32_t mode,
-    rspt_ecg_beat_result* out_beats,
-    size_t beat_capacity,
-    size_t* out_beat_count,
-    uint32_t* out_detected_r_peak_indexes,
-    size_t detected_r_peak_capacity,
-    size_t* out_detected_r_peak_count);
-
-RSPT_API int32_t rspt_analyze_ecg_beat_double(
-    const double* const* channels,
-    size_t channel_count,
-    size_t samples_per_channel,
-    double sampling_rate,
-    int32_t analysis_channel_index,
-    int32_t analysis_peak_index,
-    const uint32_t* r_peak_indexes,
-    size_t r_peak_count,
-    int32_t mode,
-    rspt_ecg_beat_result* out_beat,
-    uint32_t* out_detected_r_peak_indexes,
-    size_t detected_r_peak_capacity,
-    size_t* out_detected_r_peak_count);
-
-RSPT_API int32_t rspt_analyze_ecg_summary_double(
-    const double* const* channels,
-    size_t channel_count,
-    size_t samples_per_channel,
-    double sampling_rate,
-    int32_t analysis_channel_index,
-    const uint32_t* r_peak_indexes,
-    size_t r_peak_count,
-    int32_t mode,
-    rspt_ecg_summary_result* out_summary);
+    const uint32_t* input_r_peak_indexes,
+    size_t input_r_peak_count,
+    uint32_t* out_r_peak_indexes,
+    size_t r_peak_capacity,
+    size_t* out_r_peak_count,
+    rspt_detection_mode peak_detection_mode,
+    const uint32_t* beat_indexes_to_analyze,
+    size_t beat_index_count);
 
 #ifdef __cplusplus
 }

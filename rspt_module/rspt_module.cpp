@@ -263,7 +263,7 @@ std::vector<unsigned int> detect_peaks(py::array_t<double> ecg_signal_np, double
 
     ///cout << "Input ECG array must be 1 or 2-dimensional (samples x channels)" << endl;
     std::vector<uint32_t> peak_indexes;
-    rspt::detect_peaks_double(ecg_signal.data(), len, sampling_rate, mode_to_c_api_value(mode), peak_indexes);
+    rspt::detect_peaks(ecg_signal.data(), len, sampling_rate, static_cast<rspt_detection_mode>(mode_to_c_api_value(mode)), peak_indexes);
 
     return std::vector<unsigned int>(peak_indexes.begin(), peak_indexes.end());
 }
@@ -318,35 +318,40 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
     std::vector<const double*> data_ptrs;
     copy_ecg_signal_to_channels(ecg_signal_np, len, nr_channels, data, data_ptrs);
 
-    rspt_ecg_beat_result result;
+    std::vector<rspt_ecg_beat_result> results;
+    rspt_ecg_summary_result summary;
     std::vector<uint32_t> peak_indexes;
-    int c_mode = mode_to_c_api_value(mode);
-    int32_t status = rspt::analyze_ecg_beat_double(
+    std::vector<uint32_t> beat_indexes_to_analyze;
+    beat_indexes_to_analyze.push_back(static_cast<uint32_t>(std::max(0, analysis_peak_indx)));
+
+    int32_t status = rspt::analyze_ecg(
         data_ptrs.data(),
         nr_channels,
         len,
         sampling_rate,
+        results,
+        summary,
         analysis_ch_indx,
-        analysis_peak_indx,
         nullptr,
-        0,
-        c_mode,
-        result,
-        &peak_indexes);
+        &peak_indexes,
+        static_cast<rspt_detection_mode>(mode_to_c_api_value(mode)),
+        &beat_indexes_to_analyze);
+
+    const rspt_ecg_beat_result* result = results.empty() ? nullptr : &results[0];
 
     py::list py_annotations;
-    if (result.valid_fields & RSPT_VALID_PQRS_T_ANNOTATION)
-        py_annotations.append(annotation_to_dict(result.annotation));
+    if (result && (result->valid_fields & RSPT_VALID_PQRS_T_ANNOTATION))
+        py_annotations.append(annotation_to_dict(result->annotation));
 
     py::dict output;
     output["annotations"] = py_annotations;
-    if (status == RSPT_STATUS_OK)
+    if (status == RSPT_STATUS_OK && result)
     {
-        add_standard_metric_fields(output, result, nullptr);
-        add_peak_interval_fields(output, peak_indexes, sampling_rate, result);
-        output["analysis_status"] = result.status;
-        output["status_message"] = std::string(result.status_message);
-        add_validation_metric_fields(output, result);
+        add_standard_metric_fields(output, *result, nullptr);
+        add_peak_interval_fields(output, peak_indexes, sampling_rate, *result);
+        output["analysis_status"] = result->status;
+        output["status_message"] = std::string(result->status_message);
+        add_validation_metric_fields(output, *result);
     }
     else
     {
@@ -366,18 +371,20 @@ py::dict analyse_ecg_beats(py::array_t<double, py::array::c_style | py::array::f
     copy_ecg_signal_to_channels(ecg_signal_np, len, nr_channels, data, data_ptrs);
 
     std::vector<rspt_ecg_beat_result> results;
+    rspt_ecg_summary_result summary;
     std::vector<uint32_t> peak_indexes;
-    int32_t status = rspt::analyze_ecg_beats_double(
+    int32_t status = rspt::analyze_ecg(
         data_ptrs.data(),
         nr_channels,
         len,
         sampling_rate,
+        results,
+        summary,
         analysis_ch_indx,
         nullptr,
-        0,
-        mode_to_c_api_value(mode),
-        results,
-        &peak_indexes);
+        &peak_indexes,
+        static_cast<rspt_detection_mode>(mode_to_c_api_value(mode)),
+        nullptr);
 
     py::list py_peak_indexes;
     for (const auto peak_index : peak_indexes)
