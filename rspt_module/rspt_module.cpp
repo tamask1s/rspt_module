@@ -15,6 +15,7 @@
 #include <deque>
 #include <cmath>
 #include <algorithm>
+#include <limits>
 
 using namespace std;
 
@@ -143,6 +144,61 @@ static void add_standard_metric_fields(py::dict& output, const rspt_ecg_beat_res
     output["t_peak_to_end_interval_ms"] = summary ? numeric_or_zero(summary->t_peak_to_end_interval_ms.mean) : numeric_or_zero(result.t_peak_to_end_interval_ms);
 }
 
+static void add_peak_interval_fields(py::dict& output, const std::vector<uint32_t>& peak_indexes, double sampling_rate, const rspt_ecg_beat_result& result)
+{
+    output["is_sinus_rhythm"] = 0;
+    output["premature_beat_count"] = 0;
+
+    if (peak_indexes.size() < 2 || !std::isfinite(sampling_rate) || sampling_rate <= 0.0)
+        return;
+
+    double total_ms = 0.0;
+    double min_rr = std::numeric_limits<double>::max();
+    double max_rr = 0.0;
+    std::vector<double> rr_intervals;
+    rr_intervals.reserve(peak_indexes.size() - 1);
+
+    for (size_t i = 1; i < peak_indexes.size(); ++i)
+    {
+        if (peak_indexes[i] <= peak_indexes[i - 1])
+            continue;
+
+        double rr_ms = (peak_indexes[i] - peak_indexes[i - 1]) / sampling_rate * 1000.0;
+        if (!std::isfinite(rr_ms) || rr_ms <= 0.0)
+            continue;
+
+        rr_intervals.push_back(rr_ms);
+        total_ms += rr_ms;
+        min_rr = std::min(min_rr, rr_ms);
+        max_rr = std::max(max_rr, rr_ms);
+    }
+
+    if (rr_intervals.empty())
+        return;
+
+    double mean_rr = total_ms / static_cast<double>(rr_intervals.size());
+    double rr_variation = max_rr - min_rr;
+    int premature_beat_count = 0;
+    for (double rr_ms : rr_intervals)
+    {
+        if (mean_rr > 0.0 && rr_ms < 0.80 * mean_rr)
+            ++premature_beat_count;
+    }
+
+    output["rr_interval_ms"] = mean_rr;
+    output["rr_variation_ms"] = rr_variation;
+    output["heart_rate_bpm"] = mean_rr > 0.0 ? 60000.0 / mean_rr : 0.0;
+    output["premature_beat_count"] = premature_beat_count;
+    output["is_sinus_rhythm"] = (premature_beat_count || (mean_rr > 0.0 && rr_variation / mean_rr > 0.10)) ? 0 : 1;
+
+    if (std::isfinite(result.qt_interval_ms) && result.qt_interval_ms > 0.0 && mean_rr > 0.0)
+    {
+        double qtc_bazett_ms = result.qt_interval_ms / std::sqrt(mean_rr / 1000.0);
+        output["qtc_bazett_ms"] = qtc_bazett_ms;
+        output["qtc_interval_ms"] = qtc_bazett_ms;
+    }
+}
+
 static void add_validation_metric_fields(py::dict& output, const rspt_ecg_beat_result& result)
 {
     output["p1_wave_duration_ms"] = numeric_or_zero(result.p1_wave_duration_ms);
@@ -262,56 +318,32 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
     std::vector<const double*> data_ptrs;
     copy_ecg_signal_to_channels(ecg_signal_np, len, nr_channels, data, data_ptrs);
 
-    std::vector<rspt_ecg_beat_result> results;
+    rspt_ecg_beat_result result;
     std::vector<uint32_t> peak_indexes;
     int c_mode = mode_to_c_api_value(mode);
-    int32_t status = rspt::analyze_ecg_beats_double(
+    int32_t status = rspt::analyze_ecg_beat_double(
         data_ptrs.data(),
         nr_channels,
         len,
         sampling_rate,
         analysis_ch_indx,
+        analysis_peak_indx,
         nullptr,
         0,
         c_mode,
-        results,
+        result,
         &peak_indexes);
 
-    rspt_ecg_summary_result summary;
-    rspt::analyze_ecg_summary_double(
-        data_ptrs.data(),
-        nr_channels,
-        len,
-        sampling_rate,
-        analysis_ch_indx,
-        peak_indexes.empty() ? nullptr : peak_indexes.data(),
-        peak_indexes.size(),
-        c_mode,
-        summary);
-
-    size_t selected_index = 0;
-    if (!results.empty())
-    {
-        if (analysis_peak_indx < 0)
-            selected_index = 0;
-        else if (static_cast<size_t>(analysis_peak_indx) >= results.size())
-            selected_index = results.size() - 1;
-        else
-            selected_index = static_cast<size_t>(analysis_peak_indx);
-    }
-
     py::list py_annotations;
-    if (!results.empty())
-        py_annotations.append(annotation_to_dict(results[selected_index].annotation));
+    if (result.valid_fields & RSPT_VALID_PQRS_T_ANNOTATION)
+        py_annotations.append(annotation_to_dict(result.annotation));
 
     py::dict output;
     output["annotations"] = py_annotations;
-    if (!results.empty())
+    if (status == RSPT_STATUS_OK)
     {
-        const auto& result = results[selected_index];
-        add_standard_metric_fields(output, result, &summary);
-        output["is_sinus_rhythm"] = summary.is_sinus_rhythm >= 0 ? summary.is_sinus_rhythm : 0;
-        output["premature_beat_count"] = summary.premature_beat_count >= 0 ? summary.premature_beat_count : 0;
+        add_standard_metric_fields(output, result, nullptr);
+        add_peak_interval_fields(output, peak_indexes, sampling_rate, result);
         output["analysis_status"] = result.status;
         output["status_message"] = std::string(result.status_message);
         add_validation_metric_fields(output, result);

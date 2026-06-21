@@ -138,4 +138,55 @@ int32_t rspt_analyze_ecg_summary_double(
         *out_summary);
 }
 
+int32_t rspt_analyze_ecg_beat_double(
+    const double* const* channels,
+    size_t channel_count,
+    size_t samples_per_channel,
+    double sampling_rate,
+    int32_t analysis_channel_index,
+    int32_t analysis_peak_index,
+    const uint32_t* r_peak_indexes,
+    size_t r_peak_count,
+    int32_t mode,
+    rspt_ecg_beat_result* out_beat,
+    uint32_t* out_detected_r_peak_indexes,
+    size_t detected_r_peak_capacity,
+    size_t* out_detected_r_peak_count)
+{
+    if (!out_beat)
+        return RSPT_STATUS_INVALID_ARGUMENT;
+    if (!out_detected_r_peak_indexes && detected_r_peak_capacity > 0)
+        return RSPT_STATUS_INVALID_ARGUMENT;
+
+    std::vector<uint32_t> detected_r_peak_indexes;
+    int32_t status = rspt::analyze_ecg_beat_double(
+        channels,
+        channel_count,
+        samples_per_channel,
+        sampling_rate,
+        analysis_channel_index,
+        analysis_peak_index,
+        r_peak_indexes,
+        r_peak_count,
+        mode,
+        *out_beat,
+        &detected_r_peak_indexes);
+
+    if (out_detected_r_peak_count)
+        *out_detected_r_peak_count = detected_r_peak_indexes.size();
+
+    if (status != RSPT_STATUS_OK)
+        return status;
+    if (out_detected_r_peak_indexes && detected_r_peak_capacity < detected_r_peak_indexes.size())
+        return RSPT_STATUS_OUTPUT_BUFFER_TOO_SMALL;
+
+    if (out_detected_r_peak_indexes)
+    {
+        for (size_t i = 0; i < detected_r_peak_indexes.size(); ++i)
+            out_detected_r_peak_indexes[i] = detected_r_peak_indexes[i];
+    }
+
+    return RSPT_STATUS_OK;
+}
+
 }

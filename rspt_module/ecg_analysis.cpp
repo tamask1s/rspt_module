@@ -1608,6 +1608,135 @@ int32_t analyze_ecg_beats_double(
     return RSPT_STATUS_OK;
 }
 
+int32_t analyze_ecg_beat_double(
+    const double* const* channels,
+    size_t channel_count,
+    size_t samples_per_channel,
+    double sampling_rate,
+    int32_t analysis_channel_index,
+    int32_t analysis_peak_index,
+    const uint32_t* r_peak_indexes,
+    size_t r_peak_count,
+    int32_t mode,
+    rspt_ecg_beat_result& out_beat,
+    std::vector<uint32_t>* out_detected_r_peak_indexes)
+{
+    initialise_beat_result(out_beat);
+
+    auto fail = [&](int32_t status) -> int32_t
+    {
+        out_beat.status = status;
+        copy_message(out_beat.status_message, status_message(status));
+        return status;
+    };
+
+    if (!channels || channel_count == 0 || samples_per_channel == 0 || !std::isfinite(sampling_rate) || sampling_rate <= 0.0)
+        return fail(RSPT_STATUS_INVALID_ARGUMENT);
+    if (channel_count > static_cast<size_t>(std::numeric_limits<unsigned int>::max()) ||
+        samples_per_channel > static_cast<size_t>(std::numeric_limits<unsigned int>::max()))
+        return fail(RSPT_STATUS_INVALID_ARGUMENT);
+    if (!is_valid_mode(mode))
+        return fail(RSPT_STATUS_INVALID_ARGUMENT);
+
+    for (size_t channel = 0; channel < channel_count; ++channel)
+    {
+        if (!channels[channel])
+            return fail(RSPT_STATUS_NO_CHANNEL_DATA);
+    }
+
+    if (analysis_channel_index < 0)
+        analysis_channel_index = 0;
+    if (static_cast<size_t>(analysis_channel_index) >= channel_count)
+        return fail(RSPT_STATUS_INVALID_CHANNEL_INDEX);
+
+    std::vector<unsigned int> peak_indexes;
+    if (r_peak_indexes && r_peak_count > 0)
+    {
+        peak_indexes.reserve(r_peak_count);
+        for (size_t i = 0; i < r_peak_count; ++i)
+        {
+            if (r_peak_indexes[i] >= samples_per_channel)
+                return fail(RSPT_STATUS_INVALID_PEAK_INDEX);
+            peak_indexes.push_back(static_cast<unsigned int>(r_peak_indexes[i]));
+        }
+        std::sort(peak_indexes.begin(), peak_indexes.end());
+        peak_indexes.erase(std::unique(peak_indexes.begin(), peak_indexes.end()), peak_indexes.end());
+    }
+    else
+    {
+        int32_t status = detect_peak_indexes(
+            channels[analysis_channel_index],
+            samples_per_channel,
+            sampling_rate,
+            mode,
+            peak_indexes);
+        if (status != RSPT_STATUS_OK)
+            return fail(status);
+    }
+
+    if (out_detected_r_peak_indexes)
+    {
+        out_detected_r_peak_indexes->clear();
+        out_detected_r_peak_indexes->reserve(peak_indexes.size());
+        for (unsigned int peak_index : peak_indexes)
+            out_detected_r_peak_indexes->push_back(static_cast<uint32_t>(peak_index));
+    }
+
+    if (peak_indexes.empty())
+        return fail(RSPT_STATUS_NO_R_PEAKS);
+
+    if (analysis_peak_index < 0)
+        analysis_peak_index = 0;
+    if (static_cast<size_t>(analysis_peak_index) >= peak_indexes.size())
+        return fail(RSPT_STATUS_INVALID_PEAK_INDEX);
+
+    std::vector<const double*> channel_ptrs(channel_count);
+    for (size_t channel = 0; channel < channel_count; ++channel)
+        channel_ptrs[channel] = channels[channel];
+
+    ecg_analysis_config c;
+    std::vector<pqrst_indxes> selected_annotations;
+    ecg_analysis_result core_result = {};
+    analyse_ecg(
+        (double**)channel_ptrs.data(),
+        static_cast<unsigned int>(channel_count),
+        static_cast<unsigned int>(samples_per_channel),
+        sampling_rate,
+        peak_indexes,
+        selected_annotations,
+        core_result,
+        c,
+        static_cast<unsigned int>(analysis_channel_index),
+        analysis_peak_index);
+
+    fill_legacy_fields(core_result, sampling_rate, peak_indexes, selected_annotations);
+
+    pqrst_indxes empty_annotation;
+    for (int i = 0; i < 6; ++i)
+        empty_annotation.p[i] = -1;
+    for (int i = 0; i < 5; ++i)
+        empty_annotation.r[i] = -1;
+    for (int i = 0; i < 4; ++i)
+        empty_annotation.t[i] = -1;
+
+    std::vector<pqrst_indxes> aligned_annotations(peak_indexes.size(), empty_annotation);
+    if (!selected_annotations.empty())
+        aligned_annotations[analysis_peak_index] = selected_annotations[0];
+
+    std::vector<double> qt_dispersion_ms(peak_indexes.size(), missing_value());
+    fill_beat_result(
+        core_result,
+        aligned_annotations,
+        peak_indexes,
+        qt_dispersion_ms,
+        static_cast<size_t>(analysis_peak_index),
+        sampling_rate,
+        static_cast<uint32_t>(analysis_channel_index),
+        out_beat);
+
+    return out_beat.status;
+}
+
 int32_t analyze_ecg_summary_double(
     const double* const* channels,
     size_t channel_count,

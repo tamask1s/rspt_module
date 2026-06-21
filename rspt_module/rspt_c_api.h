@@ -44,6 +44,21 @@ RSPT_API int32_t rspt_analyze_ecg_beats_double(
     size_t detected_r_peak_capacity,
     size_t* out_detected_r_peak_count);
 
+RSPT_API int32_t rspt_analyze_ecg_beat_double(
+    const double* const* channels,
+    size_t channel_count,
+    size_t samples_per_channel,
+    double sampling_rate,
+    int32_t analysis_channel_index,
+    int32_t analysis_peak_index,
+    const uint32_t* r_peak_indexes,
+    size_t r_peak_count,
+    int32_t mode,
+    rspt_ecg_beat_result* out_beat,
+    uint32_t* out_detected_r_peak_indexes,
+    size_t detected_r_peak_capacity,
+    size_t* out_detected_r_peak_count);
+
 RSPT_API int32_t rspt_analyze_ecg_summary_double(
     const double* const* channels,
     size_t channel_count,
