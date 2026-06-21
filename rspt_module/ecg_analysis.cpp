@@ -1394,7 +1394,12 @@ int32_t run_core_analysis(
         analysis.annotations,
         analysis.results,
         analysis.analysis_channel_index);
-    if (!beat_indexes_to_analyze || beat_indexes_to_analyze->empty())
+    const bool should_calculate_qt_dispersion =
+        !beat_indexes_to_analyze ||
+        beat_indexes_to_analyze->empty() ||
+        analysis.analyzed_beat_indexes.size() >= 2;
+
+    if (should_calculate_qt_dispersion)
     {
         analysis.qt_dispersion_ms = calculate_qt_dispersion_by_beat(
             channel_ptrs.data(),
