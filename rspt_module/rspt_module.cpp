@@ -120,6 +120,25 @@ static py::dict annotation_to_dict(const rspt_pqrst_annotation& ann)
     return complex;
 }
 
+static bool has_any_pqrst_annotation(const rspt_pqrst_annotation& ann)
+{
+    return ann.p1_onset_sample >= 0 ||
+           ann.p1_peak_sample >= 0 ||
+           ann.p1_offset_sample >= 0 ||
+           ann.p2_onset_sample >= 0 ||
+           ann.p2_peak_sample >= 0 ||
+           ann.p2_offset_sample >= 0 ||
+           ann.qrs_onset_sample >= 0 ||
+           ann.r_peak_sample >= 0 ||
+           ann.qrs_offset_sample >= 0 ||
+           ann.q_peak_sample >= 0 ||
+           ann.s_peak_sample >= 0 ||
+           ann.t_onset_sample >= 0 ||
+           ann.t_peak_sample >= 0 ||
+           ann.t_offset_sample >= 0 ||
+           ann.j_point_sample >= 0;
+}
+
 static void add_standard_metric_fields(py::dict& output, const rspt_ecg_beat_result& result, const rspt_ecg_summary_result* summary)
 {
     double qtc_bazett_ms = result.qtc_bazett_ms;
@@ -340,7 +359,7 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
     const rspt_ecg_beat_result* result = results.empty() ? nullptr : &results[0];
 
     py::list py_annotations;
-    if (result && (result->valid_fields & RSPT_VALID_PQRS_T_ANNOTATION))
+    if (result && has_any_pqrst_annotation(result->annotation))
         py_annotations.append(annotation_to_dict(result->annotation));
 
     py::dict output;
@@ -350,7 +369,7 @@ py::dict analyse_ecg(py::array_t<double, py::array::c_style | py::array::forceca
         add_standard_metric_fields(output, *result, nullptr);
         add_peak_interval_fields(output, peak_indexes, sampling_rate, *result);
         output["analysis_status"] = result->status;
-        output["status_message"] = std::string(result->status_message);
+        output["status_message"] = std::string(rspt::status_message(result->status));
         add_validation_metric_fields(output, *result);
     }
     else
@@ -396,14 +415,14 @@ py::dict analyse_ecg_beats(py::array_t<double, py::array::c_style | py::array::f
         const auto& result = results[i];
         py::dict beat;
         beat["beat_index"] = i;
-        if (i < peak_indexes.size())
-            beat["r_peak_sample"] = peak_indexes[i];
+        if (result.r_peak_sample >= 0)
+            beat["r_peak_sample"] = result.r_peak_sample;
         else
             beat["r_peak_sample"] = py::none();
 
         beat["analysis_channel_index"] = result.analysis_channel_index;
         beat["analysis_status"] = result.status;
-        beat["status_message"] = std::string(result.status_message);
+        beat["status_message"] = std::string(rspt::status_message(result.status));
         beat["annotation"] = annotation_to_dict(result.annotation);
 
         add_standard_metric_fields(beat, result, nullptr);

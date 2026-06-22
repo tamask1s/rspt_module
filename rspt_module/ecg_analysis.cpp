@@ -1043,22 +1043,16 @@ bool non_negative_finite(double value)
     return std::isfinite(value) && value >= 0.0;
 }
 
-void set_if_positive(double value, double& field, uint64_t& valid_fields, uint64_t bit)
+void set_if_positive(double value, double& field)
 {
     if (positive_finite(value))
-    {
         field = value;
-        valid_fields |= bit;
-    }
 }
 
-void set_if_non_negative(double value, double& field, uint64_t& valid_fields, uint64_t bit)
+void set_if_non_negative(double value, double& field)
 {
     if (non_negative_finite(value))
-    {
         field = value;
-        valid_fields |= bit;
-    }
 }
 
 void initialise_annotation(rspt_pqrst_annotation& annotation)
@@ -1084,7 +1078,8 @@ void initialise_beat_result(rspt_ecg_beat_result& result)
 {
     std::memset(&result, 0, sizeof(result));
     result.status = RSPT_STATUS_OK;
-    copy_message(result.status_message, "OK");
+    result.analysis_channel_index = -1;
+    result.r_peak_sample = -1;
     initialise_annotation(result.annotation);
 
     result.rr_interval_ms = missing_value();
@@ -1130,7 +1125,7 @@ void initialise_summary_result(rspt_ecg_summary_result& result)
 {
     std::memset(&result, 0, sizeof(result));
     result.status = RSPT_STATUS_OK;
-    copy_message(result.status_message, "OK");
+    result.analysis_channel_index = -1;
 
     initialise_metric_statistics(result.rr_interval_ms);
     result.rr_variation_ms = missing_value();
@@ -1417,7 +1412,7 @@ int32_t run_core_analysis(
     return RSPT_STATUS_OK;
 }
 
-void copy_annotation(const pqrst_indxes& source, rspt_pqrst_annotation& destination, uint64_t& valid_fields)
+void copy_annotation(const pqrst_indxes& source, rspt_pqrst_annotation& destination)
 {
     initialise_annotation(destination);
 
@@ -1442,13 +1437,6 @@ void copy_annotation(const pqrst_indxes& source, rspt_pqrst_annotation& destinat
     destination.t_peak_sample = source.t[1];
     destination.t_offset_sample = source.t[2];
     destination.j_point_sample = source.t[3];
-
-    if (source.p[0] >= 0 && source.p[1] >= 0 && source.p[2] >= 0 &&
-        source.r[0] >= 0 && source.r[1] >= 0 && source.r[2] >= 0 &&
-        source.t[0] >= 0 && source.t[1] >= 0 && source.t[2] >= 0)
-    {
-        valid_fields |= RSPT_VALID_PQRS_T_ANNOTATION;
-    }
 }
 
 bool rr_interval_ms_for_index(
@@ -1473,7 +1461,7 @@ void fill_beat_result(
     const std::vector<double>& qt_dispersion_ms,
     size_t beat_index,
     double sampling_rate,
-    uint32_t analysis_channel_index,
+    int32_t analysis_channel_index,
     rspt_ecg_beat_result& output)
 {
     initialise_beat_result(output);
@@ -1482,12 +1470,7 @@ void fill_beat_result(
     output.beat_index = static_cast<uint32_t>(beat_index);
 
     if (beat_index < peak_indexes.size())
-    {
-        output.r_peak_sample = peak_indexes[beat_index];
-        output.valid_fields |= RSPT_VALID_R_PEAK_SAMPLE;
-    }
-
-    copy_message(output.status_message, core_result.status_message[0] ? core_result.status_message : rspt::status_message(output.status));
+        output.r_peak_sample = static_cast<int32_t>(peak_indexes[beat_index]);
 
     if (core_result.analysis_status != RSPT_STATUS_OK)
         return;
@@ -1495,40 +1478,31 @@ void fill_beat_result(
     const pqrst_indxes* annotation = (beat_index < annotations.size()) ? &annotations[beat_index] : nullptr;
     if (annotation)
     {
-        copy_annotation(*annotation, output.annotation, output.valid_fields);
+        copy_annotation(*annotation, output.annotation);
 
         int p_end_sample = annotation->p[5] >= 0 ? annotation->p[5] : annotation->p[2];
         if (annotation->p[1] >= 0 && p_end_sample >= annotation->p[1])
-        {
             output.p_peak_to_end_interval_ms = (p_end_sample - annotation->p[1]) / sampling_rate * 1000.0;
-            output.valid_fields |= RSPT_VALID_P_PEAK_TO_END_INTERVAL_MS;
-        }
 
         if (annotation->t[1] >= 0 && annotation->t[2] >= annotation->t[1])
-        {
             output.t_peak_to_end_interval_ms = (annotation->t[2] - annotation->t[1]) / sampling_rate * 1000.0;
-            output.valid_fields |= RSPT_VALID_T_PEAK_TO_END_INTERVAL_MS;
-        }
 
         if (beat_index > 0 && beat_index < annotations.size())
         {
             const pqrst_indxes& previous = annotations[beat_index - 1];
             if (previous.p[1] >= 0 && annotation->p[1] > previous.p[1])
-            {
                 output.pp_interval_ms = (annotation->p[1] - previous.p[1]) / sampling_rate * 1000.0;
-                output.valid_fields |= RSPT_VALID_PP_INTERVAL_MS;
-            }
         }
     }
 
-    set_if_positive(core_result.p_wave_duration_ms, output.p_wave_duration_ms, output.valid_fields, RSPT_VALID_P_WAVE_DURATION_MS);
+    set_if_positive(core_result.p_wave_duration_ms, output.p_wave_duration_ms);
     output.p1_wave_duration_ms = core_result.p1_wave_duration_ms;
     output.p1_amplitude_input_units = core_result.p1_amplitude_input_units;
     output.p2_wave_duration_ms = core_result.p2_wave_duration_ms;
     output.p2_amplitude_input_units = core_result.p2_amplitude_input_units;
 
-    set_if_positive(core_result.pr_interval_ms, output.pr_interval_ms, output.valid_fields, RSPT_VALID_PR_INTERVAL_MS);
-    set_if_non_negative(core_result.pr_segment_ms, output.pr_segment_ms, output.valid_fields, RSPT_VALID_PR_SEGMENT_MS);
+    set_if_positive(core_result.pr_interval_ms, output.pr_interval_ms);
+    set_if_non_negative(core_result.pr_segment_ms, output.pr_segment_ms);
 
     output.q_duration_ms = core_result.q_duration_ms;
     output.q_amplitude_input_units = core_result.q_amplitude_input_units;
@@ -1537,12 +1511,12 @@ void fill_beat_result(
     output.s_duration_ms = core_result.s_duration_ms;
     output.s_amplitude_input_units = core_result.s_amplitude_input_units;
 
-    set_if_positive(core_result.qrs_duration_ms, output.qrs_duration_ms, output.valid_fields, RSPT_VALID_QRS_DURATION_MS);
-    set_if_positive(core_result.qt_interval_ms, output.qt_interval_ms, output.valid_fields, RSPT_VALID_QT_INTERVAL_MS);
+    set_if_positive(core_result.qrs_duration_ms, output.qrs_duration_ms);
+    set_if_positive(core_result.qt_interval_ms, output.qt_interval_ms);
     if (beat_index < qt_dispersion_ms.size())
-        set_if_non_negative(qt_dispersion_ms[beat_index], output.qt_dispersion_ms, output.valid_fields, RSPT_VALID_QT_DISPERSION_MS);
-    set_if_non_negative(core_result.st_segment_ms, output.st_segment_ms, output.valid_fields, RSPT_VALID_ST_SEGMENT_MS);
-    set_if_positive(core_result.t_wave_duration_ms, output.t_wave_duration_ms, output.valid_fields, RSPT_VALID_T_WAVE_DURATION_MS);
+        set_if_non_negative(qt_dispersion_ms[beat_index], output.qt_dispersion_ms);
+    set_if_non_negative(core_result.st_segment_ms, output.st_segment_ms);
+    set_if_positive(core_result.t_wave_duration_ms, output.t_wave_duration_ms);
 
     output.j_point_amplitude_input_units = core_result.j_point_amplitude_input_units;
     output.st20_amplitude_input_units = core_result.st20_amplitude_input_units;
@@ -1556,12 +1530,8 @@ void fill_beat_result(
     {
         output.rr_interval_ms = previous_rr_ms;
         output.heart_rate_bpm = 60000.0 / previous_rr_ms;
-        output.valid_fields |= RSPT_VALID_RR_INTERVAL_MS | RSPT_VALID_HEART_RATE_BPM;
         if (positive_finite(output.qt_interval_ms))
-        {
             output.qtc_bazett_ms = output.qt_interval_ms / std::sqrt(previous_rr_ms / 1000.0);
-            output.valid_fields |= RSPT_VALID_QTC_BAZETT_MS;
-        }
     }
 }
 
@@ -1577,7 +1547,7 @@ void add_non_negative_to_stats(double value, std::vector<double>& values)
         values.push_back(value);
 }
 
-void set_stats(const std::vector<double>& values, rspt_metric_statistics& destination, uint64_t& valid_fields, uint64_t bit)
+void set_stats(const std::vector<double>& values, rspt_metric_statistics& destination)
 {
     if (values.empty())
         return;
@@ -1592,7 +1562,6 @@ void set_stats(const std::vector<double>& values, rspt_metric_statistics& destin
         sum_squares += diff * diff;
     }
     destination.standard_deviation = std::sqrt(sum_squares / static_cast<double>(values.size()));
-    valid_fields |= bit;
 }
 
 }
@@ -1625,7 +1594,7 @@ const char* status_message(int32_t status)
 
 uint32_t api_version()
 {
-    return 6;
+    return 7;
 }
 
 int32_t detect_peaks(
@@ -1650,7 +1619,7 @@ void fill_summary_result(
     const std::vector<rspt_ecg_beat_result>& beats,
     const std::vector<unsigned int>& peak_indexes,
     double sampling_rate,
-    uint32_t analysis_channel_index,
+    int32_t analysis_channel_index,
     int32_t status,
     rspt_ecg_summary_result& out_summary)
 {
@@ -1659,7 +1628,6 @@ void fill_summary_result(
     out_summary.status = status;
     out_summary.analysis_channel_index = analysis_channel_index;
     out_summary.r_peak_count = peak_indexes.size();
-    copy_message(out_summary.status_message, status_message(status));
 
     std::vector<double> rr_values;
     std::vector<double> hr_values;
@@ -1718,18 +1686,17 @@ void fill_summary_result(
     if (out_summary.analysed_beat_count == 0)
     {
         out_summary.status = first_failure_status == RSPT_STATUS_OK ? RSPT_STATUS_INVALID_PEAK_INDEX : first_failure_status;
-        copy_message(out_summary.status_message, status_message(out_summary.status));
         return;
     }
 
-    set_stats(rr_values, out_summary.rr_interval_ms, out_summary.valid_fields, RSPT_VALID_RR_INTERVAL_MS);
-    set_stats(hr_values, out_summary.heart_rate_bpm, out_summary.valid_fields, RSPT_VALID_HEART_RATE_BPM);
-    set_stats(p_values, out_summary.p_wave_duration_ms, out_summary.valid_fields, RSPT_VALID_P_WAVE_DURATION_MS);
-    set_stats(pr_values, out_summary.pr_interval_ms, out_summary.valid_fields, RSPT_VALID_PR_INTERVAL_MS);
-    set_stats(pp_values, out_summary.pp_interval_ms, out_summary.valid_fields, RSPT_VALID_PP_INTERVAL_MS);
-    set_stats(p_peak_to_end_values, out_summary.p_peak_to_end_interval_ms, out_summary.valid_fields, RSPT_VALID_P_PEAK_TO_END_INTERVAL_MS);
-    set_stats(qrs_values, out_summary.qrs_duration_ms, out_summary.valid_fields, RSPT_VALID_QRS_DURATION_MS);
-    set_stats(qt_values, out_summary.qt_interval_ms, out_summary.valid_fields, RSPT_VALID_QT_INTERVAL_MS);
+    set_stats(rr_values, out_summary.rr_interval_ms);
+    set_stats(hr_values, out_summary.heart_rate_bpm);
+    set_stats(p_values, out_summary.p_wave_duration_ms);
+    set_stats(pr_values, out_summary.pr_interval_ms);
+    set_stats(pp_values, out_summary.pp_interval_ms);
+    set_stats(p_peak_to_end_values, out_summary.p_peak_to_end_interval_ms);
+    set_stats(qrs_values, out_summary.qrs_duration_ms);
+    set_stats(qt_values, out_summary.qt_interval_ms);
 
     if (qtc_values.empty() && positive_finite(out_summary.rr_interval_ms.mean))
     {
@@ -1739,12 +1706,12 @@ void fill_summary_result(
                 qtc_values.push_back(beat.qt_interval_ms / std::sqrt(out_summary.rr_interval_ms.mean / 1000.0));
         }
     }
-    set_stats(qtc_values, out_summary.qtc_bazett_ms, out_summary.valid_fields, RSPT_VALID_QTC_BAZETT_MS);
+    set_stats(qtc_values, out_summary.qtc_bazett_ms);
 
-    set_stats(qt_dispersion_values, out_summary.qt_dispersion_ms, out_summary.valid_fields, RSPT_VALID_QT_DISPERSION_MS);
-    set_stats(st_values, out_summary.st_segment_ms, out_summary.valid_fields, RSPT_VALID_ST_SEGMENT_MS);
-    set_stats(t_values, out_summary.t_wave_duration_ms, out_summary.valid_fields, RSPT_VALID_T_WAVE_DURATION_MS);
-    set_stats(t_peak_to_end_values, out_summary.t_peak_to_end_interval_ms, out_summary.valid_fields, RSPT_VALID_T_PEAK_TO_END_INTERVAL_MS);
+    set_stats(qt_dispersion_values, out_summary.qt_dispersion_ms);
+    set_stats(st_values, out_summary.st_segment_ms);
+    set_stats(t_values, out_summary.t_wave_duration_ms);
+    set_stats(t_peak_to_end_values, out_summary.t_peak_to_end_interval_ms);
 
     if (!rr_values.empty())
     {
@@ -1766,7 +1733,6 @@ void fill_summary_result(
     }
 
     out_summary.status = RSPT_STATUS_OK;
-    copy_message(out_summary.status_message, "OK");
 }
 
 int32_t analyze_ecg(
@@ -1806,7 +1772,7 @@ int32_t analyze_ecg(
 
     if (status != RSPT_STATUS_OK)
     {
-        fill_summary_result(out_beat_results, analysis.peak_indexes, sampling_rate, analysis.analysis_channel_index < 0 ? 0 : static_cast<uint32_t>(analysis.analysis_channel_index), status, out_summary);
+        fill_summary_result(out_beat_results, analysis.peak_indexes, sampling_rate, analysis.analysis_channel_index, status, out_summary);
         return status;
     }
 
@@ -1821,11 +1787,11 @@ int32_t analyze_ecg(
             analysis.qt_dispersion_ms,
             beat_index,
             sampling_rate,
-            static_cast<uint32_t>(analysis.analysis_channel_index),
+            analysis.analysis_channel_index,
             out_beat_results[i]);
     }
 
-    fill_summary_result(out_beat_results, analysis.peak_indexes, sampling_rate, static_cast<uint32_t>(analysis.analysis_channel_index), RSPT_STATUS_OK, out_summary);
+    fill_summary_result(out_beat_results, analysis.peak_indexes, sampling_rate, analysis.analysis_channel_index, RSPT_STATUS_OK, out_summary);
     return RSPT_STATUS_OK;
 }
 

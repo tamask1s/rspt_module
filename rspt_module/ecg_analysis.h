@@ -43,6 +43,7 @@ int32_t detect_peaks(
  * max(QT) - min(QT) across available channels, so it requires at least two analyzable channels. The current
  * implementation computes QT dispersion in all-beat mode and for explicit selected-beat requests with at least
  * two analyzed beats; otherwise per-beat QT dispersion is left invalid.
+ * Result structs use NaN for unavailable double metrics and -1 for unavailable sample indexes.
  *
  * @param channels ECG channel array. channels[ch][sample] must be valid for every channel and sample.
  * @param channel_count Number of ECG channels in channels.

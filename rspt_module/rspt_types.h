@@ -19,23 +19,9 @@ typedef enum rspt_detection_mode {
     RSPT_MODE_HIGH_PPV = 2
 } rspt_detection_mode;
 
-#define RSPT_VALID_R_PEAK_SAMPLE             (1ULL << 0)
-#define RSPT_VALID_RR_INTERVAL_MS            (1ULL << 1)
-#define RSPT_VALID_HEART_RATE_BPM            (1ULL << 2)
-#define RSPT_VALID_P_WAVE_DURATION_MS        (1ULL << 3)
-#define RSPT_VALID_PR_INTERVAL_MS            (1ULL << 4)
-#define RSPT_VALID_PR_SEGMENT_MS             (1ULL << 5)
-#define RSPT_VALID_QRS_DURATION_MS           (1ULL << 6)
-#define RSPT_VALID_QT_INTERVAL_MS            (1ULL << 7)
-#define RSPT_VALID_QTC_BAZETT_MS             (1ULL << 8)
-#define RSPT_VALID_ST_SEGMENT_MS             (1ULL << 9)
-#define RSPT_VALID_T_WAVE_DURATION_MS        (1ULL << 10)
-#define RSPT_VALID_PQRS_T_ANNOTATION         (1ULL << 11)
-#define RSPT_VALID_PP_INTERVAL_MS            (1ULL << 12)
-#define RSPT_VALID_P_PEAK_TO_END_INTERVAL_MS (1ULL << 13)
-#define RSPT_VALID_T_PEAK_TO_END_INTERVAL_MS (1ULL << 14)
-#define RSPT_VALID_QT_DISPERSION_MS          (1ULL << 15)
-
+/**
+ * PQRST annotation sample indexes. Unavailable sample indexes are reported as -1.
+ */
 typedef struct rspt_pqrst_annotation {
     int32_t p1_onset_sample;
     int32_t p1_peak_sample;
@@ -56,13 +42,18 @@ typedef struct rspt_pqrst_annotation {
     int32_t j_point_sample;
 } rspt_pqrst_annotation;
 
+/**
+ * Per-beat ECG analysis result.
+ *
+ * Double metrics use NaN when the value is unavailable. Sample indexes use -1
+ * when unavailable. status describes whether this beat was analyzed
+ * successfully; use rspt_status_message/status_message to convert it to text.
+ */
 typedef struct rspt_ecg_beat_result {
     int32_t status;
-    uint64_t valid_fields;
-    uint32_t analysis_channel_index;
+    int32_t analysis_channel_index;
     uint32_t beat_index;
-    uint32_t r_peak_sample;
-    char status_message[64];
+    int32_t r_peak_sample;
 
     rspt_pqrst_annotation annotation;
 
@@ -101,19 +92,28 @@ typedef struct rspt_ecg_beat_result {
     double t_amplitude_input_units;
 } rspt_ecg_beat_result;
 
+/**
+ * Summary statistics for a metric. If count is 0, mean and standard_deviation
+ * are NaN.
+ */
 typedef struct rspt_metric_statistics {
     size_t count;
     double mean;
     double standard_deviation;
 } rspt_metric_statistics;
 
+/**
+ * Aggregate ECG analysis result.
+ *
+ * Double metrics use NaN when unavailable. status describes whether the
+ * aggregate analysis completed successfully; use rspt_status_message/
+ * status_message to convert it to text.
+ */
 typedef struct rspt_ecg_summary_result {
     int32_t status;
-    uint64_t valid_fields;
-    uint32_t analysis_channel_index;
+    int32_t analysis_channel_index;
     size_t r_peak_count;
     size_t analysed_beat_count;
-    char status_message[64];
 
     rspt_metric_statistics rr_interval_ms;
     double rr_variation_ms;

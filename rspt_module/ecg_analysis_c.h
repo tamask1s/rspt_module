@@ -65,6 +65,8 @@ RSPT_API int32_t rspt_detect_peaks(
  * computes QT dispersion in all-beat mode and for explicit selected-beat
  * requests with at least two analyzed beats; otherwise per-beat QT dispersion
  * is left invalid.
+ * Result structs use NaN for unavailable double metrics and -1 for unavailable
+ * sample indexes.
  *
  * The caller owns all buffers. To query output sizes, pass out_beat_results
  * and/or out_r_peak_indexes as NULL with the corresponding capacity set to 0.
