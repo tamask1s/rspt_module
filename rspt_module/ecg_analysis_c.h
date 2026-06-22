@@ -66,7 +66,8 @@ RSPT_API int32_t rspt_detect_peaks(
  * requests with at least two analyzed beats; otherwise per-beat QT dispersion
  * is left invalid.
  * Result structs use NaN for unavailable double metrics and -1 for unavailable
- * sample indexes.
+ * sample indexes. Summary metric statistics use valid_count to report how many
+ * valid beat values contributed to mean/std.
  *
  * The caller owns all buffers. To query output sizes, pass out_beat_results
  * and/or out_r_peak_indexes as NULL with the corresponding capacity set to 0.

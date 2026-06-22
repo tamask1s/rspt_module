@@ -1116,7 +1116,7 @@ void initialise_beat_result(rspt_ecg_beat_result& result)
 
 void initialise_metric_statistics(rspt_metric_statistics& stats)
 {
-    stats.count = 0;
+    stats.valid_count = 0;
     stats.mean = missing_value();
     stats.standard_deviation = missing_value();
 }
@@ -1552,7 +1552,7 @@ void set_stats(const std::vector<double>& values, rspt_metric_statistics& destin
     if (values.empty())
         return;
 
-    destination.count = values.size();
+    destination.valid_count = values.size();
     destination.mean = std::accumulate(values.begin(), values.end(), 0.0) / static_cast<double>(values.size());
 
     double sum_squares = 0.0;
@@ -1594,7 +1594,7 @@ const char* status_message(int32_t status)
 
 uint32_t api_version()
 {
-    return 7;
+    return 8;
 }
 
 int32_t detect_peaks(

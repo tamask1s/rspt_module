@@ -44,6 +44,7 @@ int32_t detect_peaks(
  * implementation computes QT dispersion in all-beat mode and for explicit selected-beat requests with at least
  * two analyzed beats; otherwise per-beat QT dispersion is left invalid.
  * Result structs use NaN for unavailable double metrics and -1 for unavailable sample indexes.
+ * Summary metric statistics use valid_count to report how many valid beat values contributed to mean/std.
  *
  * @param channels ECG channel array. channels[ch][sample] must be valid for every channel and sample.
  * @param channel_count Number of ECG channels in channels.
