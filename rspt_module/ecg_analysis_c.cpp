@@ -1,4 +1,4 @@
-#include "rspt_c_api.h"
+#include "ecg_analysis_c.h"
 
 #include "ecg_analysis.h"
 
