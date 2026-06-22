@@ -1,13 +1,5 @@
 from setuptools import setup, Extension, find_packages
-import numpy
-import os
-
-# pybind11 include dir-t csak build időben töltjük be
-try:
-    import pybind11
-    pybind11_include = pybind11.get_include()
-except ImportError:
-    pybind11_include = ""
+from setuptools.command.build_ext import build_ext
 
 # Read README for long description
 def read_readme():
@@ -24,10 +16,23 @@ module = Extension(
              'rspt_module/lib_filter/iir_filter.cpp',
              'rspt_module/ecg_analysis.cpp',
              'rspt_module/ecg_analysis_c.cpp'],
-    include_dirs=[numpy.get_include(), pybind11_include],
+    include_dirs=[],
     language='c++',
     extra_compile_args=['-std=c++17']
 )
+
+
+class BuildExt(build_ext):
+    def finalize_options(self):
+        super().finalize_options()
+
+        import numpy
+        import pybind11
+
+        for extension in self.extensions:
+            extension.include_dirs.append(numpy.get_include())
+            extension.include_dirs.append(pybind11.get_include())
+
 
 setup(
     name='rspt_module',
@@ -37,8 +42,8 @@ setup(
     long_description_content_type='text/markdown',
     packages=find_packages(),
     ext_modules=[module],
-    install_requires=['numpy'],
-    setup_requires=['pybind11>=2.5.0,<2.11.0', 'numpy'],
+    cmdclass={'build_ext': BuildExt},
+    install_requires=['numpy<2'],
     python_requires='>=3.6',
     zip_safe=False,
 )
