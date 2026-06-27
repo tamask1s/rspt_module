@@ -492,7 +492,7 @@ inline void find_wave_bounds(const double* signal, int peak_idx, int left_limit,
 
     lbound = left_limit;
     rbound = right_limit;
-    if constexpr (wave_is_positive)
+    if /*constexpr*/ (wave_is_positive)
     {
         for (int i = peak_idx; i > left_limit; --i)
             if (signal[i] - baseline <= trshld)
@@ -915,92 +915,6 @@ static void fill_legacy_fields(ecg_analysis_result& result, double sampling_rate
 
 }
 
-ecg_analysis_result analyse_ecg_detect_peaks(const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate, std::vector<pqrst_indxes>& annotations, std::vector<unsigned int>* peak_indexes, std::string mode, int analysis_ch_indx, int analysis_peak_indx)
-{
-    ecg_analysis_config c;
-    if (analysis_ch_indx < 0) analysis_ch_indx = 0;
-    if (analysis_ch_indx >= (int)nr_channels) analysis_ch_indx = nr_channels - 1;
-
-    std::vector<double> peak_signal(nr_samples_per_channel), filt_signal(nr_samples_per_channel), trshld_signal(nr_samples_per_channel);
-    bool local_peak_indexes_used = false;
-    if (!peak_indexes)
-    {
-        peak_indexes = new std::vector<unsigned int>;
-        local_peak_indexes_used = true;
-    }
-    peak_detector_offline detector(sampling_rate);
-    if (mode == "high_sensitivity")
-        detector.set_mode(peak_detector_offline::Mode::high_sensitivity);
-    else if (mode == "high_ppv")
-        detector.set_mode(peak_detector_offline::Mode::high_ppv);
-    else
-        detector.set_mode(peak_detector_offline::Mode::def);
-
-    //detector.detect_multichannel(data, nr_channels, nr_samples_per_channel, peak_signal.data(), filt_signal.data(), trshld_signal.data(), peak_indexes);
-    detector.detect(data[analysis_ch_indx], nr_samples_per_channel, peak_signal.data(), filt_signal.data(), trshld_signal.data(), peak_indexes);
-    ecg_analysis_result result;
-    if (true && peak_indexes->size() == 0)
-    {
-        double min_val, max_val;
-        int min_indx = 0, max_indx = 0;
-        min_max_idx(data[analysis_ch_indx], nr_samples_per_channel, min_val, max_val, min_indx, max_indx);
-        if (peak_indexes->size() == 0)
-        {
-            double baseline = median(data[analysis_ch_indx], nr_samples_per_channel);
-            if ((max_val - baseline) > (baseline - min_val))
-                peak_indexes->push_back(max_indx);
-            else
-                peak_indexes->push_back(min_indx);
-        }
-    }
-    analyse_ecg((double**)data, (unsigned int)nr_channels, nr_samples_per_channel, sampling_rate, *peak_indexes, annotations, result, c, analysis_ch_indx, analysis_peak_indx);
-
-    fill_legacy_fields(result, sampling_rate, *peak_indexes, annotations);
-
-    if (local_peak_indexes_used)
-        delete peak_indexes;
-    return result;
-}
-
-void analyse_ecg_all_beats(const double** data, size_t nr_channels, size_t nr_samples_per_channel, double sampling_rate, const std::vector<unsigned int>& peak_indexes, std::vector<pqrst_indxes>& annotations, std::vector<ecg_analysis_result>& results, int analysis_ch_indx)
-{
-    annotations.clear();
-    results.clear();
-
-    if (analysis_ch_indx < 0)
-        analysis_ch_indx = 0;
-
-    ecg_analysis_config c;
-    annotations.reserve(peak_indexes.size());
-    results.reserve(peak_indexes.size());
-
-    for (size_t peak_index = 0; peak_index < peak_indexes.size(); ++peak_index)
-    {
-        std::vector<pqrst_indxes> beat_annotations;
-        ecg_analysis_result beat_result = {};
-
-        analyse_ecg((double**)data,
-                    (unsigned int)nr_channels,
-                    (unsigned int)nr_samples_per_channel,
-                    sampling_rate,
-                    peak_indexes,
-                    beat_annotations,
-                    beat_result,
-                    c,
-                    (unsigned int)analysis_ch_indx,
-                    (int)peak_index);
-
-        fill_legacy_fields(beat_result, sampling_rate, peak_indexes, beat_annotations);
-
-        if (!beat_annotations.empty())
-            annotations.push_back(beat_annotations[0]);
-        else
-            annotations.push_back({});
-
-        results.push_back(beat_result);
-    }
-}
-
 namespace
 {
 
@@ -1024,13 +938,6 @@ void configure_detector(peak_detector_offline& detector, int32_t mode)
         detector.set_mode(peak_detector_offline::Mode::high_ppv);
     else
         detector.set_mode(peak_detector_offline::Mode::def);
-}
-
-void copy_message(char* dest, const char* message)
-{
-    if (!dest)
-        return;
-    std::snprintf(dest, kStatusMessageSize, "%s", message ? message : "");
 }
 
 bool positive_finite(double value)
