@@ -732,7 +732,7 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
         return;
     }
 
-    double* lead_cpy = new double[nr_samples_per_ch];
+    std::vector<double> lead_cpy(nr_samples_per_ch);
     for (unsigned int i = 0; i < nr_samples_per_ch; i++)
     {
         ecg_signal[analysis_ch_indx][i] *= c.bias.amplitude_scale;
@@ -757,42 +757,39 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
             }
         };
 
-        forward_backward_filter(lead_cpy, nr_samples_per_ch, c.filter.nr_filter_iterations);
+        forward_backward_filter(lead_cpy.data(), nr_samples_per_ch, c.filter.nr_filter_iterations);
     }
 
     if (c.artifact.enable_artifact_removal)
-        remove_artifacts(lead_cpy, nr_samples_per_ch, sampling_rate, c.artifact);
+        remove_artifacts(lead_cpy.data(), nr_samples_per_ch, sampling_rate, c.artifact);
     //write_binmx_to_file("c:/Tamas/test001.bin", (const double**)&lead_cpy, 1, nr_samples_per_ch, sampling_rate);
 
     int isoel_start = -1, isoel_r = -1;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_indexes[analysis_peak_indx], c.isoel.qrs_max_search_ms, c.isoel.qrs_dt_ms, c.isoel.qrs_perimeter_ms, isoel_start, isoel_r, c, c.isoel.qrs_isoel_tolerance, c.isoel.qrs_extend_mode);
+    search_isoel_bounds(lead_cpy.data(), nr_samples_per_ch, sampling_rate, peak_indexes[analysis_peak_indx], c.isoel.qrs_max_search_ms, c.isoel.qrs_dt_ms, c.isoel.qrs_perimeter_ms, isoel_start, isoel_r, c, c.isoel.qrs_isoel_tolerance, c.isoel.qrs_extend_mode);
     if (isoel_start < 0 || isoel_r < 0 || isoel_start >= (int)nr_samples_per_ch || isoel_r >= (int)nr_samples_per_ch || isoel_start >= isoel_r)
     {
         result.analysis_status = 5;
         std::snprintf(result.status_message, sizeof(result.status_message), "Invalid QRS boundaries");
-        delete[] lead_cpy;
         return;
     }
 
     int peak_p1, peak_p2 = -1, peak_t;
     int p_isoel_offset_samples = c.search.p_isoel_offset_ms * sampling_rate / 1000.0;
-    search_p_and_t_peaks(lead_cpy, nr_samples_per_ch, sampling_rate, c.search.p_search_left_ms, c.search.t_search_right_ms, isoel_start - p_isoel_offset_samples, isoel_r, peak_p1, peak_p2, peak_t, c);
+    search_p_and_t_peaks(lead_cpy.data(), nr_samples_per_ch, sampling_rate, c.search.p_search_left_ms, c.search.t_search_right_ms, isoel_start - p_isoel_offset_samples, isoel_r, peak_p1, peak_p2, peak_t, c);
     if (peak_p1 < 0 || peak_p1 >= (int)nr_samples_per_ch || peak_t < 0 || peak_t >= (int)nr_samples_per_ch)
     {
         result.analysis_status = 5;
         std::snprintf(result.status_message, sizeof(result.status_message), "Invalid P or T peak");
-        delete[] lead_cpy;
         return;
     }
 
     int isoel_p_l = -1, isoel_p_r = -1;
     double p_amp1 = 0, p_amp2 = 0;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_p1, c.isoel.p_max_search_ms, c.isoel.p_dt_ms, c.isoel.p_perimeter_ms, isoel_p_l, isoel_p_r, c, c.isoel.p_isoel_tolerance, c.isoel.p_extend_mode, isoel_start, &peak_p2, &p_amp1, &p_amp2);
+    search_isoel_bounds(lead_cpy.data(), nr_samples_per_ch, sampling_rate, peak_p1, c.isoel.p_max_search_ms, c.isoel.p_dt_ms, c.isoel.p_perimeter_ms, isoel_p_l, isoel_p_r, c, c.isoel.p_isoel_tolerance, c.isoel.p_extend_mode, isoel_start, &peak_p2, &p_amp1, &p_amp2);
     if (isoel_p_l < 0 || isoel_p_r < 0 || isoel_p_l >= (int)nr_samples_per_ch || isoel_p_r >= (int)nr_samples_per_ch || isoel_p_l >= isoel_p_r)
     {
         result.analysis_status = 5;
         std::snprintf(result.status_message, sizeof(result.status_message), "Invalid P wave boundaries");
-        delete[] lead_cpy;
         return;
     }
 
@@ -800,7 +797,7 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
     double min_val, max_val;
     int min_indx = 0, max_indx = 0;
     double baseline = (lead_cpy[isoel_p_l] + lead_cpy[isoel_p_r]) / 2;
-    min_max_idx(lead_cpy + isoel_p_l, isoel_p_r - isoel_p_l, min_val, max_val, min_indx, max_indx);
+    min_max_idx(lead_cpy.data() + isoel_p_l, isoel_p_r - isoel_p_l, min_val, max_val, min_indx, max_indx);
     double pos_amp = max_val - baseline;
     double neg_amp = baseline - min_val;
     min_indx += isoel_p_l;
@@ -829,12 +826,11 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
     }
 
     int isoel_t_l = -1, isoel_t_r = -1;
-    search_isoel_bounds(lead_cpy, nr_samples_per_ch, sampling_rate, peak_t, c.isoel.t_max_search_ms, c.isoel.t_dt_ms, c.isoel.t_perimeter_ms, isoel_t_l, isoel_t_r, c, c.isoel.t_isoel_tolerance, c.isoel.t_extend_mode);
+    search_isoel_bounds(lead_cpy.data(), nr_samples_per_ch, sampling_rate, peak_t, c.isoel.t_max_search_ms, c.isoel.t_dt_ms, c.isoel.t_perimeter_ms, isoel_t_l, isoel_t_r, c, c.isoel.t_isoel_tolerance, c.isoel.t_extend_mode);
     if (isoel_t_l < 0 || isoel_t_r < 0 || isoel_t_l >= (int)nr_samples_per_ch || isoel_t_r >= (int)nr_samples_per_ch || isoel_t_l >= isoel_t_r)
     {
         result.analysis_status = 5;
         std::snprintf(result.status_message, sizeof(result.status_message), "Invalid T wave boundaries");
-        delete[] lead_cpy;
         return;
     }
 
@@ -869,8 +865,6 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
     annotations[0].t[2] = isoel_t_r;
 
     fill_wave_measurements((double*)ecg_signal[analysis_ch_indx], nr_samples_per_ch, annotations[0], sampling_rate, c, result);
-
-    delete[] lead_cpy;
 }
 
 static void fill_legacy_fields(ecg_analysis_result& result, double sampling_rate, const std::vector<unsigned int>& peak_indexes, const std::vector<pqrst_indxes>& annotations)

@@ -296,7 +296,7 @@ public:
         integrative_filter_.reset();
         threshold_filter_.reset();
 
-        double* baseline = new double[len];
+        std::vector<double> baseline(len);
         for (unsigned int i = 0; i < len; ++i)
         {
             baseline[i] = baseline_filter_.filter(ecg_signal[i]);
@@ -402,7 +402,6 @@ public:
                 if (peak_signal[i])
                     (*peak_indexes)[nr_peaks++] = i;
         }
-        delete[] baseline;
         return (nr_peaks / 2) > nr_min_peaks ? nr_peaks : (-nr_peaks);
     }
 
@@ -443,10 +442,8 @@ public:
 
     inline int detect_multich(const double** ecg_signal, unsigned int nr_channels, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = previous_peak_reference_ratio_default_)
     {
-//        double* baseline = new double[len];
-        double* ecg_signal_s = new double[len];
-        double* artifacts = new double[len];
-        memset(ecg_signal_s, 0, len);
+        std::vector<double> ecg_signal_s(len, 0.0);
+        std::vector<double> artifacts(len, 0.0);
         for (unsigned int ch = 0; ch < nr_channels; ++ch)
         {
             bandpass_filter_.init_history_values(ecg_signal[ch][0], sampling_rate_);
@@ -580,9 +577,6 @@ public:
                 if (peak_signal[i])
                     (*peak_indexes)[nr_peaks++] = i;
         }
-//        delete[] baseline;
-        delete[] ecg_signal_s;
-        delete[] artifacts;
         //return (nr_peaks / 2) > nr_min_peaks ? nr_peaks : (-nr_peaks);
         return 0;
     }
@@ -603,7 +597,7 @@ public:
                 sign_array[i] = 0; /// todo: check why is it more optimal to skip pozitive channels?
         }
 
-        double* ecg_signal = new double[len];
+        std::vector<double> ecg_signal(len);
         for (size_t i = 0; i < len; ++i)
         {
             ecg_signal[i] = ecg_signal_multich[0][i];
@@ -620,7 +614,7 @@ public:
 
 //        std::vector<std::vector<unsigned int>> peak_detector_offline::peak_index_array;
 
-        detect(ecg_signal, len, peak_signal, filt_signal, threshold_signal, peak_indexes, r_reference_value, previous_peak_reference_ratio);
+        detect(ecg_signal.data(), len, peak_signal, filt_signal, threshold_signal, peak_indexes, r_reference_value, previous_peak_reference_ratio);
 //        peak_index_array.resize(nr_channels);
 //        set_mode(Mode::high_sensitivity);
 //        for (unsigned int i = 0; i < nr_channels; ++i)
@@ -628,7 +622,6 @@ public:
 //        const unsigned int tolerance = (50 * sampling_rate_) / 1000.0;
 //        //*peak_indexes = peak_index_array[0];
 //        cleanup_index_array(*peak_indexes, peak_index_array, tolerance, nr_channels);
-        delete[] ecg_signal;
     }
 
     /*inline void detect9985_9978_9982(double* ecg_signal, unsigned int len, double* peak_signal, double* filt_signal, double* threshold_signal, std::vector<unsigned int>* peak_indexes = 0, double r_reference_value = 0, double previous_peak_reference_ratio = 0.5)
@@ -637,7 +630,7 @@ public:
         bandpass_filter_.init_history_values(ecg_signal[0], sampling_rate_);
         baseline_filter_.init_history_values(ecg_signal[0], sampling_rate_);
 
-        double* baseline = new double[len];
+        std::vector<double> baseline(len);
         for (unsigned int i = 0; i < len; ++i)
             baseline[i] = baseline_filter_.filter(ecg_signal[i]);
         for (int i = len - 1; i > -1; --i)
@@ -735,9 +728,7 @@ public:
                         --nr_peaks;
                     }
                 if (peak_signal[i])
-                {
                     average_r += filt_signal[i];
-                }
             }
         average_r /= (double)nr_peaks;
         if (peak_indexes)
@@ -748,7 +739,6 @@ public:
                 if (peak_signal[i])
                     (*peak_indexes)[nr_peaks++] = i;
         }
-        delete[] baseline;
         if (!r_reference_value)
             detect(ecg_signal, len, peak_signal, filt_signal, threshold_signal, peak_indexes, average_r, 0.2);
     }*/
