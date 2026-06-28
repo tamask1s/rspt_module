@@ -378,3 +378,118 @@ bool create_filter_iir(vector<double>& n, vector<double>& d, filter_kind kind, f
     }
     return false;
 }
+
+static bool valid_fir_params(int kernel_size, double sampling_rate, double cutoff)
+{
+    return kernel_size > 1 && sampling_rate > 0.0 && cutoff > 0.0 && cutoff < sampling_rate / 2.0;
+}
+
+static double normalized_sinc(double x)
+{
+    if (std::abs(x) < 1e-12)
+        return 1.0;
+    return sin(M_PI * x) / (M_PI * x);
+}
+
+static double hamming_window(int n, int kernel_size)
+{
+    if (kernel_size <= 1)
+        return 1.0;
+    return 0.54 - 0.46 * cos(2.0 * M_PI * n / (kernel_size - 1));
+}
+
+static void normalize_fir_sum(vector<double>& kernel)
+{
+    double sum = 0.0;
+    for (double v : kernel)
+        sum += v;
+    if (std::abs(sum) < 1e-12)
+        return;
+    for (double& v : kernel)
+        v /= sum;
+}
+
+static bool create_filter_fir_low_pass_raw(vector<double>& kernel, int kernel_size, double sampling_rate, double cutoff)
+{
+    if (!valid_fir_params(kernel_size, sampling_rate, cutoff))
+        return false;
+
+    kernel.resize(kernel_size);
+    const double normalized_cutoff = cutoff / sampling_rate;
+    const double center = (kernel_size - 1) / 2.0;
+    for (int n = 0; n < kernel_size; ++n)
+    {
+        const double m = n - center;
+        kernel[n] = 2.0 * normalized_cutoff * normalized_sinc(2.0 * normalized_cutoff * m);
+        kernel[n] *= hamming_window(n, kernel_size);
+    }
+    return true;
+}
+
+bool create_filter_fir_low_pass(vector<double>& kernel, int kernel_size, double sampling_rate, double cutoff)
+{
+    if (!create_filter_fir_low_pass_raw(kernel, kernel_size, sampling_rate, cutoff))
+        return false;
+    normalize_fir_sum(kernel);
+    return true;
+}
+
+bool create_filter_fir_high_pass(vector<double>& kernel, int kernel_size, double sampling_rate, double cutoff)
+{
+    if (kernel_size % 2 == 0)
+        return false;
+    if (!create_filter_fir_low_pass(kernel, kernel_size, sampling_rate, cutoff))
+        return false;
+
+    for (double& v : kernel)
+        v = -v;
+    kernel[kernel_size / 2] += 1.0;
+    return true;
+}
+
+static bool create_filter_fir_band_pass(vector<double>& kernel, int kernel_size, double sampling_rate, double cutoff_low, double cutoff_high)
+{
+    if (cutoff_high <= cutoff_low)
+        return false;
+
+    vector<double> lp_low;
+    vector<double> lp_high;
+    if (!create_filter_fir_low_pass(lp_low, kernel_size, sampling_rate, cutoff_low))
+        return false;
+    if (!create_filter_fir_low_pass(lp_high, kernel_size, sampling_rate, cutoff_high))
+        return false;
+
+    kernel.resize(kernel_size);
+    for (int i = 0; i < kernel_size; ++i)
+        kernel[i] = lp_high[i] - lp_low[i];
+    return true;
+}
+
+static bool create_filter_fir_band_stop(vector<double>& kernel, int kernel_size, double sampling_rate, double cutoff_low, double cutoff_high)
+{
+    if (kernel_size % 2 == 0)
+        return false;
+    if (!create_filter_fir_band_pass(kernel, kernel_size, sampling_rate, cutoff_low, cutoff_high))
+        return false;
+
+    for (double& v : kernel)
+        v = -v;
+    kernel[kernel_size / 2] += 1.0;
+    return true;
+}
+
+bool create_filter_fir(vector<double>& kernel, filter_type type, int kernel_size, double sampling_rate, double cutoff_low, double cutoff_high)
+{
+    if (kernel_size <= 1)
+        return false;
+
+    if (type == low_pass)
+        return create_filter_fir_low_pass(kernel, kernel_size, sampling_rate, cutoff_low);
+    if (type == high_pass)
+        return create_filter_fir_high_pass(kernel, kernel_size, sampling_rate, cutoff_low);
+    if (type == band_pass)
+        return create_filter_fir_band_pass(kernel, kernel_size, sampling_rate, cutoff_low, cutoff_high);
+    if (type == band_stop)
+        return create_filter_fir_band_stop(kernel, kernel_size, sampling_rate, cutoff_low, cutoff_high);
+    return false;
+}

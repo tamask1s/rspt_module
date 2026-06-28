@@ -108,6 +108,11 @@ enum filter_kind
 /** designs filter coefficients. Only 2nd order butterworth low_pass, high_pass and band_pass filters are currently supported. */
 bool create_filter_iir(vector<double>& n, vector<double>& d, filter_kind kind, filter_type type, int order, double sampling_rate, double cutoff_low, double cutoff_high);
 
+/** designs a Hamming-windowed FIR kernel. low_pass, high_pass, band_pass and band_stop filters are supported. */
+bool create_filter_fir(vector<double>& kernel, filter_type type, int kernel_size, double sampling_rate, double cutoff_low, double cutoff_high);
+bool create_filter_fir_low_pass(vector<double>& kernel, int kernel_size, double sampling_rate, double cutoff);
+bool create_filter_fir_high_pass(vector<double>& kernel, int kernel_size, double sampling_rate, double cutoff);
+
 /** example coefficients @ 2kSps:
 
 double n[] = {1.00000000000, -3.14332095199, 3.70064088865, -1.97083923944, 0.41351972908}; /// BP 0.4-200
