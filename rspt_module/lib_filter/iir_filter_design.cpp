@@ -28,9 +28,21 @@ using namespace std;
 
 #include "../filter.h"
 
+static bool valid_iir_cutoff(double sampling_rate, double cutoff)
+{
+    return sampling_rate > 0.0 && cutoff > 0.0 && cutoff < sampling_rate / 2.0;
+}
+
+static bool valid_iir_band(double sampling_rate, double cutoff_low, double cutoff_high)
+{
+    return valid_iir_cutoff(sampling_rate, cutoff_low) &&
+           valid_iir_cutoff(sampling_rate, cutoff_high) &&
+           cutoff_low < cutoff_high;
+}
+
 bool create_filter_iir_butterworth(vector<double>& n, vector<double>& d, filter_type type, int order, double sampling_rate, double cutoff_low)
 {
-    if(order != 2 || (type != low_pass && type != high_pass) || sampling_rate <= 0 || cutoff_low <= 0)
+    if(order != 2 || (type != low_pass && type != high_pass) || !valid_iir_cutoff(sampling_rate, cutoff_low))
         return false;
 
     // Prewarpolt cutoff: K = tan(pi*fc/fs)
@@ -67,7 +79,7 @@ bool create_filter_iir_butterworth(vector<double>& n, vector<double>& d, filter_
 
 bool create_filter_iir_butterworth_first_order(vector<double>& n, vector<double>& d, filter_type type, double sampling_rate, double cutoff)
 {
-    if ((type != low_pass && type != high_pass) || sampling_rate <= 0 || cutoff <= 0)
+    if ((type != low_pass && type != high_pass) || !valid_iir_cutoff(sampling_rate, cutoff))
         return false;
 
     // Prewarp-olt cutoff: K = tan(pi * fc / fs)
@@ -247,7 +259,7 @@ vector<double> poly_z_plus_1(int n)
 bool create_filter_iir_butterworth_bandpass(vector<double>& n, vector<double>& d, filter_type type, int order, double sampling_rate, double cutoff_low, double cutoff_high)
 {
     // Csak a band_pass és a 2. rendu prototípust támogatjuk.
-    if (order != 2 || type != band_pass || sampling_rate <= 0 || cutoff_low <= 0 || cutoff_high <= cutoff_low)
+    if (order != 2 || type != band_pass || !valid_iir_band(sampling_rate, cutoff_low, cutoff_high))
         return false;
 
     double T = 1.0 / sampling_rate;
@@ -313,7 +325,7 @@ bool create_filter_iir_butterworth_bandpass(vector<double>& n, vector<double>& d
 
 bool create_filter_iir_butterworth_bandpass_first_order(std::vector<double>& n, std::vector<double>& d, double sampling_rate, double cutoff_low, double cutoff_high)
 {
-    if (sampling_rate <= 0 || cutoff_low <= 0 || cutoff_high <= cutoff_low)
+    if (!valid_iir_band(sampling_rate, cutoff_low, cutoff_high))
         return false;
 
     // Prewarp
@@ -362,18 +374,21 @@ bool create_filter_iir_butterworth_bandpass_first_order(std::vector<double>& n, 
 
 bool create_filter_iir(vector<double>& n, vector<double>& d, filter_kind kind, filter_type type, int order, double sampling_rate, double cutoff_low, double cutoff_high)
 {
+    if (kind != butterworth || type == type_invalid || type == band_stop)
+        return false;
+
     if (order == 2)
     {
         if (type == low_pass || type == high_pass)
             return create_filter_iir_butterworth(n, d, type, order, sampling_rate, cutoff_low);
-        else
+        if (type == band_pass)
             return create_filter_iir_butterworth_bandpass(n, d, type, order, sampling_rate, cutoff_low, cutoff_high);
     }
     else if (order == 1)
     {
         if (type == low_pass || type == high_pass)
             return create_filter_iir_butterworth_first_order(n, d, type, sampling_rate, cutoff_low);
-        else
+        if (type == band_pass)
             return create_filter_iir_butterworth_bandpass_first_order(n, d, sampling_rate, cutoff_low, cutoff_high);
     }
     return false;
@@ -454,9 +469,9 @@ static bool create_filter_fir_band_pass(vector<double>& kernel, int kernel_size,
 
     vector<double> lp_low;
     vector<double> lp_high;
-    if (!create_filter_fir_low_pass(lp_low, kernel_size, sampling_rate, cutoff_low))
+    if (!create_filter_fir_low_pass_raw(lp_low, kernel_size, sampling_rate, cutoff_low))
         return false;
-    if (!create_filter_fir_low_pass(lp_high, kernel_size, sampling_rate, cutoff_high))
+    if (!create_filter_fir_low_pass_raw(lp_high, kernel_size, sampling_rate, cutoff_high))
         return false;
 
     kernel.resize(kernel_size);
@@ -475,6 +490,7 @@ static bool create_filter_fir_band_stop(vector<double>& kernel, int kernel_size,
     for (double& v : kernel)
         v = -v;
     kernel[kernel_size / 2] += 1.0;
+    normalize_fir_sum(kernel);
     return true;
 }
 

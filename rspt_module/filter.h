@@ -94,7 +94,7 @@ enum filter_type
     high_pass = 0,
     low_pass,
     band_pass,
-    band_stop // not supported yet
+    band_stop // currently supported by FIR design only
 };
 
 enum filter_kind
