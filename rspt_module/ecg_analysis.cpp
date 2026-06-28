@@ -742,7 +742,7 @@ void analyse_ecg(double** ecg_signal, unsigned int nr_ch, unsigned int nr_sample
     if (c.filter.nr_filter_iterations)
     {
         iir_filter_4th_order bandpass_filter_;
-        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 2, sampling_rate, c.filter.low_cut_hz, c.filter.high_cut_hz);
+        create_filter_iir(bandpass_filter_.n, bandpass_filter_.d, butterworth, band_pass, 2, sampling_rate, c.filter.low_cut_hz, c.filter.high_cut_hz);
 
         auto forward_backward_filter = [&](double* data, unsigned int length, unsigned int iterations)
         {

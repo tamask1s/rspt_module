@@ -66,9 +66,9 @@ public:
           peak_attenuation_(1.0 / (1.0 + previous_peak_reference_attenuation_ / sampling_rate)),
           nr_slope_samples_((100.0 * sampling_rate) / 1000.0)
     {
-        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 2, sampling_rate, 10, 20);
-        create_filter_iir(integrative_filter_.d, integrative_filter_.n, butterworth, low_pass, 2, sampling_rate, 3, 0);
-        create_filter_iir(threshold_filter_.d, threshold_filter_.n, butterworth, low_pass, 2, sampling_rate, 0.15, 0);
+        create_filter_iir(bandpass_filter_.n, bandpass_filter_.d, butterworth, band_pass, 2, sampling_rate, 10, 20);
+        create_filter_iir(integrative_filter_.n, integrative_filter_.d, butterworth, low_pass, 2, sampling_rate, 3, 0);
+        create_filter_iir(threshold_filter_.n, threshold_filter_.d, butterworth, low_pass, 2, sampling_rate, 0.15, 0);
     }
 
     /**
@@ -159,9 +159,9 @@ public:
 //          peak_attenuation_(1.0 / (1.0 + previous_peak_reference_attenuation_ / sampling_rate)),
 //          nr_slope_samples_((100.0 * sampling_rate) / 1000.0)
 //    {
-//        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 1, sampling_rate, 10, 20);
-//        create_filter_iir(integrative_filter_.d, integrative_filter_.n, butterworth, low_pass, 1, sampling_rate, 3, 0);
-//        create_filter_iir(threshold_filter_.d, threshold_filter_.n, butterworth, low_pass, 2, sampling_rate, 0.15, 0);
+//        create_filter_iir(bandpass_filter_.n, bandpass_filter_.d, butterworth, band_pass, 1, sampling_rate, 10, 20);
+//        create_filter_iir(integrative_filter_.n, integrative_filter_.d, butterworth, low_pass, 1, sampling_rate, 3, 0);
+//        create_filter_iir(threshold_filter_.n, threshold_filter_.d, butterworth, low_pass, 2, sampling_rate, 0.15, 0);
 //    }
 //
 //    /**
@@ -255,10 +255,10 @@ public:
         : sampling_rate_(sampling_rate),
           marker_val_(marker_val)
     {
-        create_filter_iir(bandpass_filter_.d, bandpass_filter_.n, butterworth, band_pass, 1, sampling_rate, 19, 25);
-        create_filter_iir(integrative_filter_.d, integrative_filter_.n, butterworth, low_pass, 1, sampling_rate, 2.7, 0);
-        create_filter_iir(baseline_filter_.d, baseline_filter_.n, butterworth, low_pass, 1, sampling_rate, 0.6, 0);
-        create_filter_iir(threshold_filter_.d, threshold_filter_.n, butterworth, low_pass, 1, sampling_rate, 0.55, 0);
+        create_filter_iir(bandpass_filter_.n, bandpass_filter_.d, butterworth, band_pass, 1, sampling_rate, 19, 25);
+        create_filter_iir(integrative_filter_.n, integrative_filter_.d, butterworth, low_pass, 1, sampling_rate, 2.7, 0);
+        create_filter_iir(baseline_filter_.n, baseline_filter_.d, butterworth, low_pass, 1, sampling_rate, 0.6, 0);
+        create_filter_iir(threshold_filter_.n, threshold_filter_.d, butterworth, low_pass, 1, sampling_rate, 0.55, 0);
         set_mode(peak_detector_offline::Mode::def);
     }
 

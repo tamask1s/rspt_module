@@ -23,24 +23,24 @@ using namespace std;
 
 #include "../filter.h"
 
-static inline void rolling_iir_filter_5_(const double* d, const double* n, const double* xz, double* yz)
+static inline void rolling_iir_filter_5_(const double* n, const double* d, const double* xz, double* yz)
 {
-    yz[0] = d[0] * xz[0] + d[1] * xz[1] + d[2] * xz[2] + d[3] * xz[3] + d[4] * xz[4] - n[1] * yz[1] - n[2] * yz[2] - n[3] * yz[3] - n[4] * yz[4];
+    yz[0] = n[0] * xz[0] + n[1] * xz[1] + n[2] * xz[2] + n[3] * xz[3] + n[4] * xz[4] - d[1] * yz[1] - d[2] * yz[2] - d[3] * yz[3] - d[4] * yz[4];
 }
 
-static inline void rolling_iir_filter_4_(const double* d, const double* n, const double* xz, double* yz)
+static inline void rolling_iir_filter_4_(const double* n, const double* d, const double* xz, double* yz)
 {
-    yz[0] = d[0] * xz[0] + d[1] * xz[1] + d[2] * xz[2] + d[3] * xz[3] - n[1] * yz[1] - n[2] * yz[2] - n[3] * yz[3];
+    yz[0] = n[0] * xz[0] + n[1] * xz[1] + n[2] * xz[2] + n[3] * xz[3] - d[1] * yz[1] - d[2] * yz[2] - d[3] * yz[3];
 }
 
-static inline void rolling_iir_filter_3_(const double* d, const double* n, const double* xz, double* yz)
+static inline void rolling_iir_filter_3_(const double* n, const double* d, const double* xz, double* yz)
 {
-    yz[0] = d[0] * xz[0] + d[1] * xz[1] + d[2] * xz[2] - n[1] * yz[1] - n[2] * yz[2];
+    yz[0] = n[0] * xz[0] + n[1] * xz[1] + n[2] * xz[2] - d[1] * yz[1] - d[2] * yz[2];
 }
 
-static inline void rolling_iir_filter_2_(const double* d, const double* n, const double* xz, double* yz)
+static inline void rolling_iir_filter_2_(const double* n, const double* d, const double* xz, double* yz)
 {
-    yz[0] = d[0] * xz[0] + d[1] * xz[1] - n[1] * yz[1];
+    yz[0] = n[0] * xz[0] + n[1] * xz[1] - d[1] * yz[1];
 }
 
 class iir_filter: public i_filter
@@ -69,11 +69,11 @@ public:
             y_ring_[i] = y_ring_[i - 1];
         }
         x_ring_[0] = x;
-        y_ring_[0] = d[0] * x_ring_[0];
+        y_ring_[0] = n[0] * x_ring_[0];
         for (unsigned int i = 1; i < nr_coefficients_; ++i)
         {
-            y_ring_[0] += d[i] * x_ring_[i];
-            y_ring_[0] -= n[i] * y_ring_[i];
+            y_ring_[0] += n[i] * x_ring_[i];
+            y_ring_[0] -= d[i] * y_ring_[i];
         }
         return y_ring_[0];
     }
@@ -89,16 +89,16 @@ public:
         switch (nr_coefficients_)
         {
         case 5:
-            rolling_iir_filter_5_(d, n, x_ring_.data(), y_ring_.data());
+            rolling_iir_filter_5_(n, d, x_ring_.data(), y_ring_.data());
             break;
         case 4:
-            rolling_iir_filter_4_(d, n, x_ring_.data(), y_ring_.data());
+            rolling_iir_filter_4_(n, d, x_ring_.data(), y_ring_.data());
             break;
         case 3:
-            rolling_iir_filter_3_(d, n, x_ring_.data(), y_ring_.data());
+            rolling_iir_filter_3_(n, d, x_ring_.data(), y_ring_.data());
             break;
         case 2:
-            rolling_iir_filter_2_(d, n, x_ring_.data(), y_ring_.data());
+            rolling_iir_filter_2_(n, d, x_ring_.data(), y_ring_.data());
             break;
         default:
             break;

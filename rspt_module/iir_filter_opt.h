@@ -34,7 +34,7 @@ struct iir_filter_2nd_order
         xz[1] = xz[0];
         yz[1] = yz[0];
         xz[0] = x;
-        yz[0] = d[0] * xz[0] + d[1] * xz[1] + d[2] * xz[2] - n[1] * yz[1] - n[2] * yz[2];
+        yz[0] = n[0] * xz[0] + n[1] * xz[1] + n[2] * xz[2] - d[1] * yz[1] - d[2] * yz[2];
         return yz[0];
     }
 
@@ -48,35 +48,35 @@ struct iir_filter_2nd_order
 //            {
 //                y[i] = 0;
 //                for (unsigned int j = 0; j <= i; j++)
-//                    y[i] += d[j] * x[i - j];
+//                    y[i] += n[j] * x[i - j];
 //                for (unsigned int j = 1; j <= i; j++)
-//                    y[i] -= n[j] * y[i - j];
+//                    y[i] -= d[j] * y[i - j];
 //            }
 //            switch (a_nr_coefs)
 //            {
 //            case 2:
 //                for (unsigned int i = a_nr_coefs - 1; i < a_len; ++i)
-//                    y[i] = d[0] * x[i] + d[1] * x[i - 1] - n[1] * y[i - 1];
+//                    y[i] = n[0] * x[i] + n[1] * x[i - 1] - d[1] * y[i - 1];
 //                break;
 //            case 3:
 //                for (unsigned int i = a_nr_coefs - 1; i < a_len; ++i)
-//                    y[i] = d[0] * x[i] + d[1] * x[i - 1] + d[2] * x[i - 2] - n[1] * y[i - 1] - n[2] * y[i - 2];
+//                    y[i] = n[0] * x[i] + n[1] * x[i - 1] + n[2] * x[i - 2] - d[1] * y[i - 1] - d[2] * y[i - 2];
 //                break;
 //            case 4:
 //                for (unsigned int i = a_nr_coefs - 1; i < a_len; ++i)
-//                    y[i] = d[0] * x[i] + d[1] * x[i - 1] + d[2] * x[i - 2] + d[3] * x[i - 3] - n[1] * y[i - 1] - n[2] * y[i - 2] - n[3] * y[i - 3];
+//                    y[i] = n[0] * x[i] + n[1] * x[i - 1] + n[2] * x[i - 2] + n[3] * x[i - 3] - d[1] * y[i - 1] - d[2] * y[i - 2] - d[3] * y[i - 3];
 //                break;
 //            case 5:
 //                for (unsigned int i = a_nr_coefs - 1; i < a_len; ++i)
-//                    y[i] = d[0] * x[i] + d[1] * x[i - 1] + d[2] * x[i - 2] + d[3] * x[i - 3] + d[4] * x[i - 4] - n[1] * y[i - 1] - n[2] * y[i - 2] - n[3] * y[i - 3] - n[4] * y[i - 4];
+//                    y[i] = n[0] * x[i] + n[1] * x[i - 1] + n[2] * x[i - 2] + n[3] * x[i - 3] + n[4] * x[i - 4] - d[1] * y[i - 1] - d[2] * y[i - 2] - d[3] * y[i - 3] - d[4] * y[i - 4];
 //                break;
 //            case 6:
 //                for (unsigned int i = a_nr_coefs - 1; i < a_len; ++i)
-//                    y[i] = d[0] * x[i] + d[1] * x[i - 1] + d[2] * x[i - 2] + d[3] * x[i - 3] + d[4] * x[i - 4] + d[5] * x[i - 5] - n[1] * y[i - 1] - n[2] * y[i - 2] - n[3] * y[i - 3] - n[4] * y[i - 4] - n[5] * y[i - 5];
+//                    y[i] = n[0] * x[i] + n[1] * x[i - 1] + n[2] * x[i - 2] + n[3] * x[i - 3] + n[4] * x[i - 4] + n[5] * x[i - 5] - d[1] * y[i - 1] - d[2] * y[i - 2] - d[3] * y[i - 3] - d[4] * y[i - 4] - d[5] * y[i - 5];
 //                break;
 //            case 7:
 //                for (unsigned int i = a_nr_coefs - 1; i < a_len; ++i)
-//                    y[i] = d[0] * x[i] + d[1] * x[i - 1] + d[2] * x[i - 2] + d[3] * x[i - 3] + d[4] * x[i - 4] + d[5] * x[i - 5] + d[6] * x[i - 6] - n[1] * y[i - 1] - n[2] * y[i - 2] - n[3] * y[i - 3] - n[4] * y[i - 4] - n[5] * y[i - 5] - n[6] * y[i - 6];
+//                    y[i] = n[0] * x[i] + n[1] * x[i - 1] + n[2] * x[i - 2] + n[3] * x[i - 3] + n[4] * x[i - 4] + n[5] * x[i - 5] + n[6] * x[i - 6] - d[1] * y[i - 1] - d[2] * y[i - 2] - d[3] * y[i - 3] - d[4] * y[i - 4] - d[5] * y[i - 5] - d[6] * y[i - 6];
 //                break;
 //            }
 //        }
@@ -86,36 +86,36 @@ struct iir_filter_2nd_order
 //    {
 //        int a_nr_coefs = 3;
 //
-//        y[a_len - 1] = d[0] * x[a_len - 1];
-//        y[a_len - 2] = d[0] * x[a_len - 2] + d[1] * x[a_len - 1] - n[1] * y[a_len - 1];
+//        y[a_len - 1] = n[0] * x[a_len - 1];
+//        y[a_len - 2] = n[0] * x[a_len - 2] + n[1] * x[a_len - 1] - d[1] * y[a_len - 1];
 //
 //        if (a_nr_coefs > 2)
-//            y[a_len - 3] = d[0] * x[a_len - 3] + d[1] * x[a_len - 2] + d[2] * x[a_len - 1] - n[1] * y[a_len - 2] - n[2] * y[a_len - 1] ;
+//            y[a_len - 3] = n[0] * x[a_len - 3] + n[1] * x[a_len - 2] + n[2] * x[a_len - 1] - d[1] * y[a_len - 2] - d[2] * y[a_len - 1] ;
 //        if (a_nr_coefs > 3)
-//            y[a_len - 4] = d[0] * x[a_len - 4] + d[1] * x[a_len - 3] + d[2] * x[a_len - 2] + d[3] * x[a_len - 1] - n[1] * y[a_len - 3] - n[2] * y[a_len - 2] - n[3] * y[a_len - 1];
+//            y[a_len - 4] = n[0] * x[a_len - 4] + n[1] * x[a_len - 3] + n[2] * x[a_len - 2] + n[3] * x[a_len - 1] - d[1] * y[a_len - 3] - d[2] * y[a_len - 2] - d[3] * y[a_len - 1];
 //        if (a_nr_coefs > 4)
-//            y[a_len - 5] = d[0] * x[a_len - 5] + d[1] * x[a_len - 4] + d[2] * x[a_len - 3] + d[3] * x[a_len - 2] + d[4] * x[a_len - 1] - n[1] * y[a_len - 4] - n[2] * y[a_len - 3] - n[3] * y[a_len - 2] - n[4] * y[a_len - 1] ;
+//            y[a_len - 5] = n[0] * x[a_len - 5] + n[1] * x[a_len - 4] + n[2] * x[a_len - 3] + n[3] * x[a_len - 2] + n[4] * x[a_len - 1] - d[1] * y[a_len - 4] - d[2] * y[a_len - 3] - d[3] * y[a_len - 2] - d[4] * y[a_len - 1] ;
 //        if (a_nr_coefs > 5)
-//            y[a_len - 6] = d[0] * x[a_len - 6] + d[1] * x[a_len - 5] + d[2] * x[a_len - 4] + d[3] * x[a_len - 3] + d[4] * x[a_len - 2] + d[5] * x[a_len - 1] - n[1] * y[a_len - 5] - n[2] * y[a_len - 4] - n[3] * y[a_len - 3] - n[4] * y[a_len - 2] - n[5] * y[a_len - 1] ;
+//            y[a_len - 6] = n[0] * x[a_len - 6] + n[1] * x[a_len - 5] + n[2] * x[a_len - 4] + n[3] * x[a_len - 3] + n[4] * x[a_len - 2] + n[5] * x[a_len - 1] - d[1] * y[a_len - 5] - d[2] * y[a_len - 4] - d[3] * y[a_len - 3] - d[4] * y[a_len - 2] - d[5] * y[a_len - 1] ;
 //
 //        if (a_nr_coefs == 2)
 //            for (int i = a_len - a_nr_coefs; i > - 1; --i)
-//                y[i] = d[0] * x[i] + d[1] * x[i + 1] - n[1] * y[i + 1];
+//                y[i] = n[0] * x[i] + n[1] * x[i + 1] - d[1] * y[i + 1];
 //        if (a_nr_coefs == 3)
 //            for (int i = a_len - a_nr_coefs; i > - 1; --i)
-//                y[i] = d[0] * x[i] + d[1] * x[i + 1] + d[2] * x[i + 2] - n[1] * y[i + 1] - n[2] * y[i + 2];
+//                y[i] = n[0] * x[i] + n[1] * x[i + 1] + n[2] * x[i + 2] - d[1] * y[i + 1] - d[2] * y[i + 2];
 //        if (a_nr_coefs == 4)
 //            for (int i = a_len - a_nr_coefs; i > - 1; --i)
-//                y[i] = d[0] * x[i] + d[1] * x[i + 1] + d[2] * x[i + 2] + d[3] * x[i + 3] - n[1] * y[i + 1] - n[2] * y[i + 2] - n[3] * y[i + 3];
+//                y[i] = n[0] * x[i] + n[1] * x[i + 1] + n[2] * x[i + 2] + n[3] * x[i + 3] - d[1] * y[i + 1] - d[2] * y[i + 2] - d[3] * y[i + 3];
 //        if (a_nr_coefs == 5)
 //            for (int i = a_len - a_nr_coefs; i > - 1; --i)
-//                y[i] = d[0] * x[i] + d[1] * x[i + 1] + d[2] * x[i + 2] + d[3] * x[i + 3] + d[4] * x[i + 4] - n[1] * y[i + 1] - n[2] * y[i + 2] - n[3] * y[i + 3] - n[4] * y[i + 4];
+//                y[i] = n[0] * x[i] + n[1] * x[i + 1] + n[2] * x[i + 2] + n[3] * x[i + 3] + n[4] * x[i + 4] - d[1] * y[i + 1] - d[2] * y[i + 2] - d[3] * y[i + 3] - d[4] * y[i + 4];
 //        if (a_nr_coefs == 6)
 //            for (int i = a_len - a_nr_coefs; i > - 1; --i)
-//                y[i] = d[0] * x[i] + d[1] * x[i + 1] + d[2] * x[i + 2] + d[3] * x[i + 3] + d[4] * x[i + 4] + d[5] * x[i + 5] - n[1] * y[i + 1] - n[2] * y[i + 2] - n[3] * y[i + 3] - n[4] * y[i + 4] - n[5] * y[i + 5];
+//                y[i] = n[0] * x[i] + n[1] * x[i + 1] + n[2] * x[i + 2] + n[3] * x[i + 3] + n[4] * x[i + 4] + n[5] * x[i + 5] - d[1] * y[i + 1] - d[2] * y[i + 2] - d[3] * y[i + 3] - d[4] * y[i + 4] - d[5] * y[i + 5];
 //        if (a_nr_coefs == 7)
 //            for (int i = a_len - a_nr_coefs; i > - 1; --i)
-//                y[i] = d[0] * x[i] + d[1] * x[i + 1] + d[2] * x[i + 2] + d[3] * x[i + 3] + d[4] * x[i + 4] + d[5] * x[i + 5] + d[6] * x[i + 6] - n[1] * y[i + 1] - n[2] * y[i + 2] - n[3] * y[i + 3] - n[4] * y[i + 4] - n[5] * y[i + 5] - n[6] * y[i + 6];
+//                y[i] = n[0] * x[i] + n[1] * x[i + 1] + n[2] * x[i + 2] + n[3] * x[i + 3] + n[4] * x[i + 4] + n[5] * x[i + 5] + n[6] * x[i + 6] - d[1] * y[i + 1] - d[2] * y[i + 2] - d[3] * y[i + 3] - d[4] * y[i + 4] - d[5] * y[i + 5] - d[6] * y[i + 6];
 //    }
 
     void reset()
@@ -150,7 +150,7 @@ struct iir_filter_1st_order
         xz[1] = xz[0];
         yz[1] = yz[0];
         xz[0] = x;
-        yz[0] = d[0] * xz[0] + d[1] * xz[1] - n[1] * yz[1];
+        yz[0] = n[0] * xz[0] + n[1] * xz[1] - d[1] * yz[1];
         return yz[0];
     }
 
@@ -164,35 +164,35 @@ struct iir_filter_1st_order
 //            {
 //                y[i] = 0;
 //                for (unsigned int j = 0; j <= i; j++)
-//                    y[i] += d[j] * x[i - j];
+//                    y[i] += n[j] * x[i - j];
 //                for (unsigned int j = 1; j <= i; j++)
-//                    y[i] -= n[j] * y[i - j];
+//                    y[i] -= d[j] * y[i - j];
 //            }
 //            switch (a_nr_coefs)
 //            {
 //            case 2:
 //                for (unsigned int i = a_nr_coefs - 1; i < a_len; ++i)
-//                    y[i] = d[0] * x[i] + d[1] * x[i - 1] - n[1] * y[i - 1];
+//                    y[i] = n[0] * x[i] + n[1] * x[i - 1] - d[1] * y[i - 1];
 //                break;
 //            case 3:
 //                for (unsigned int i = a_nr_coefs - 1; i < a_len; ++i)
-//                    y[i] = d[0] * x[i] + d[1] * x[i - 1] + d[2] * x[i - 2] - n[1] * y[i - 1] - n[2] * y[i - 2];
+//                    y[i] = n[0] * x[i] + n[1] * x[i - 1] + n[2] * x[i - 2] - d[1] * y[i - 1] - d[2] * y[i - 2];
 //                break;
 //            case 4:
 //                for (unsigned int i = a_nr_coefs - 1; i < a_len; ++i)
-//                    y[i] = d[0] * x[i] + d[1] * x[i - 1] + d[2] * x[i - 2] + d[3] * x[i - 3] - n[1] * y[i - 1] - n[2] * y[i - 2] - n[3] * y[i - 3];
+//                    y[i] = n[0] * x[i] + n[1] * x[i - 1] + n[2] * x[i - 2] + n[3] * x[i - 3] - d[1] * y[i - 1] - d[2] * y[i - 2] - d[3] * y[i - 3];
 //                break;
 //            case 5:
 //                for (unsigned int i = a_nr_coefs - 1; i < a_len; ++i)
-//                    y[i] = d[0] * x[i] + d[1] * x[i - 1] + d[2] * x[i - 2] + d[3] * x[i - 3] + d[4] * x[i - 4] - n[1] * y[i - 1] - n[2] * y[i - 2] - n[3] * y[i - 3] - n[4] * y[i - 4];
+//                    y[i] = n[0] * x[i] + n[1] * x[i - 1] + n[2] * x[i - 2] + n[3] * x[i - 3] + n[4] * x[i - 4] - d[1] * y[i - 1] - d[2] * y[i - 2] - d[3] * y[i - 3] - d[4] * y[i - 4];
 //                break;
 //            case 6:
 //                for (unsigned int i = a_nr_coefs - 1; i < a_len; ++i)
-//                    y[i] = d[0] * x[i] + d[1] * x[i - 1] + d[2] * x[i - 2] + d[3] * x[i - 3] + d[4] * x[i - 4] + d[5] * x[i - 5] - n[1] * y[i - 1] - n[2] * y[i - 2] - n[3] * y[i - 3] - n[4] * y[i - 4] - n[5] * y[i - 5];
+//                    y[i] = n[0] * x[i] + n[1] * x[i - 1] + n[2] * x[i - 2] + n[3] * x[i - 3] + n[4] * x[i - 4] + n[5] * x[i - 5] - d[1] * y[i - 1] - d[2] * y[i - 2] - d[3] * y[i - 3] - d[4] * y[i - 4] - d[5] * y[i - 5];
 //                break;
 //            case 7:
 //                for (unsigned int i = a_nr_coefs - 1; i < a_len; ++i)
-//                    y[i] = d[0] * x[i] + d[1] * x[i - 1] + d[2] * x[i - 2] + d[3] * x[i - 3] + d[4] * x[i - 4] + d[5] * x[i - 5] + d[6] * x[i - 6] - n[1] * y[i - 1] - n[2] * y[i - 2] - n[3] * y[i - 3] - n[4] * y[i - 4] - n[5] * y[i - 5] - n[6] * y[i - 6];
+//                    y[i] = n[0] * x[i] + n[1] * x[i - 1] + n[2] * x[i - 2] + n[3] * x[i - 3] + n[4] * x[i - 4] + n[5] * x[i - 5] + n[6] * x[i - 6] - d[1] * y[i - 1] - d[2] * y[i - 2] - d[3] * y[i - 3] - d[4] * y[i - 4] - d[5] * y[i - 5] - d[6] * y[i - 6];
 //                break;
 //            }
 //        }
@@ -202,36 +202,36 @@ struct iir_filter_1st_order
 //    {
 //        int a_nr_coefs = 2;
 //
-//        y[a_len - 1] = d[0] * x[a_len - 1];
-//        y[a_len - 2] = d[0] * x[a_len - 2] + d[1] * x[a_len - 1] - n[1] * y[a_len - 1];
+//        y[a_len - 1] = n[0] * x[a_len - 1];
+//        y[a_len - 2] = n[0] * x[a_len - 2] + n[1] * x[a_len - 1] - d[1] * y[a_len - 1];
 //
 //        if (a_nr_coefs > 2)
-//            y[a_len - 3] = d[0] * x[a_len - 3] + d[1] * x[a_len - 2] + d[2] * x[a_len - 1] - n[1] * y[a_len - 2] - n[2] * y[a_len - 1] ;
+//            y[a_len - 3] = n[0] * x[a_len - 3] + n[1] * x[a_len - 2] + n[2] * x[a_len - 1] - d[1] * y[a_len - 2] - d[2] * y[a_len - 1] ;
 //        if (a_nr_coefs > 3)
-//            y[a_len - 4] = d[0] * x[a_len - 4] + d[1] * x[a_len - 3] + d[2] * x[a_len - 2] + d[3] * x[a_len - 1] - n[1] * y[a_len - 3] - n[2] * y[a_len - 2] - n[3] * y[a_len - 1];
+//            y[a_len - 4] = n[0] * x[a_len - 4] + n[1] * x[a_len - 3] + n[2] * x[a_len - 2] + n[3] * x[a_len - 1] - d[1] * y[a_len - 3] - d[2] * y[a_len - 2] - d[3] * y[a_len - 1];
 //        if (a_nr_coefs > 4)
-//            y[a_len - 5] = d[0] * x[a_len - 5] + d[1] * x[a_len - 4] + d[2] * x[a_len - 3] + d[3] * x[a_len - 2] + d[4] * x[a_len - 1] - n[1] * y[a_len - 4] - n[2] * y[a_len - 3] - n[3] * y[a_len - 2] - n[4] * y[a_len - 1] ;
+//            y[a_len - 5] = n[0] * x[a_len - 5] + n[1] * x[a_len - 4] + n[2] * x[a_len - 3] + n[3] * x[a_len - 2] + n[4] * x[a_len - 1] - d[1] * y[a_len - 4] - d[2] * y[a_len - 3] - d[3] * y[a_len - 2] - d[4] * y[a_len - 1] ;
 //        if (a_nr_coefs > 5)
-//            y[a_len - 6] = d[0] * x[a_len - 6] + d[1] * x[a_len - 5] + d[2] * x[a_len - 4] + d[3] * x[a_len - 3] + d[4] * x[a_len - 2] + d[5] * x[a_len - 1] - n[1] * y[a_len - 5] - n[2] * y[a_len - 4] - n[3] * y[a_len - 3] - n[4] * y[a_len - 2] - n[5] * y[a_len - 1] ;
+//            y[a_len - 6] = n[0] * x[a_len - 6] + n[1] * x[a_len - 5] + n[2] * x[a_len - 4] + n[3] * x[a_len - 3] + n[4] * x[a_len - 2] + n[5] * x[a_len - 1] - d[1] * y[a_len - 5] - d[2] * y[a_len - 4] - d[3] * y[a_len - 3] - d[4] * y[a_len - 2] - d[5] * y[a_len - 1] ;
 //
 //        if (a_nr_coefs == 2)
 //            for (int i = a_len - a_nr_coefs; i > - 1; --i)
-//                y[i] = d[0] * x[i] + d[1] * x[i + 1] - n[1] * y[i + 1];
+//                y[i] = n[0] * x[i] + n[1] * x[i + 1] - d[1] * y[i + 1];
 //        if (a_nr_coefs == 3)
 //            for (int i = a_len - a_nr_coefs; i > - 1; --i)
-//                y[i] = d[0] * x[i] + d[1] * x[i + 1] + d[2] * x[i + 2] - n[1] * y[i + 1] - n[2] * y[i + 2];
+//                y[i] = n[0] * x[i] + n[1] * x[i + 1] + n[2] * x[i + 2] - d[1] * y[i + 1] - d[2] * y[i + 2];
 //        if (a_nr_coefs == 4)
 //            for (int i = a_len - a_nr_coefs; i > - 1; --i)
-//                y[i] = d[0] * x[i] + d[1] * x[i + 1] + d[2] * x[i + 2] + d[3] * x[i + 3] - n[1] * y[i + 1] - n[2] * y[i + 2] - n[3] * y[i + 3];
+//                y[i] = n[0] * x[i] + n[1] * x[i + 1] + n[2] * x[i + 2] + n[3] * x[i + 3] - d[1] * y[i + 1] - d[2] * y[i + 2] - d[3] * y[i + 3];
 //        if (a_nr_coefs == 5)
 //            for (int i = a_len - a_nr_coefs; i > - 1; --i)
-//                y[i] = d[0] * x[i] + d[1] * x[i + 1] + d[2] * x[i + 2] + d[3] * x[i + 3] + d[4] * x[i + 4] - n[1] * y[i + 1] - n[2] * y[i + 2] - n[3] * y[i + 3] - n[4] * y[i + 4];
+//                y[i] = n[0] * x[i] + n[1] * x[i + 1] + n[2] * x[i + 2] + n[3] * x[i + 3] + n[4] * x[i + 4] - d[1] * y[i + 1] - d[2] * y[i + 2] - d[3] * y[i + 3] - d[4] * y[i + 4];
 //        if (a_nr_coefs == 6)
 //            for (int i = a_len - a_nr_coefs; i > - 1; --i)
-//                y[i] = d[0] * x[i] + d[1] * x[i + 1] + d[2] * x[i + 2] + d[3] * x[i + 3] + d[4] * x[i + 4] + d[5] * x[i + 5] - n[1] * y[i + 1] - n[2] * y[i + 2] - n[3] * y[i + 3] - n[4] * y[i + 4] - n[5] * y[i + 5];
+//                y[i] = n[0] * x[i] + n[1] * x[i + 1] + n[2] * x[i + 2] + n[3] * x[i + 3] + n[4] * x[i + 4] + n[5] * x[i + 5] - d[1] * y[i + 1] - d[2] * y[i + 2] - d[3] * y[i + 3] - d[4] * y[i + 4] - d[5] * y[i + 5];
 //        if (a_nr_coefs == 7)
 //            for (int i = a_len - a_nr_coefs; i > - 1; --i)
-//                y[i] = d[0] * x[i] + d[1] * x[i + 1] + d[2] * x[i + 2] + d[3] * x[i + 3] + d[4] * x[i + 4] + d[5] * x[i + 5] + d[6] * x[i + 6] - n[1] * y[i + 1] - n[2] * y[i + 2] - n[3] * y[i + 3] - n[4] * y[i + 4] - n[5] * y[i + 5] - n[6] * y[i + 6];
+//                y[i] = n[0] * x[i] + n[1] * x[i + 1] + n[2] * x[i + 2] + n[3] * x[i + 3] + n[4] * x[i + 4] + n[5] * x[i + 5] + n[6] * x[i + 6] - d[1] * y[i + 1] - d[2] * y[i + 2] - d[3] * y[i + 3] - d[4] * y[i + 4] - d[5] * y[i + 5] - d[6] * y[i + 6];
 //    }
 
     void reset()
@@ -270,7 +270,7 @@ struct iir_filter_4th_order
             yz[i] = yz[i - 1];
         }
         xz[0] = x;
-        yz[0] = d[0] * xz[0] + d[1] * xz[1] + d[2] * xz[2] + d[3] * xz[3] + d[4] * xz[4] - n[1] * yz[1] - n[2] * yz[2] - n[3] * yz[3] - n[4] * yz[4];
+        yz[0] = n[0] * xz[0] + n[1] * xz[1] + n[2] * xz[2] + n[3] * xz[3] + n[4] * xz[4] - d[1] * yz[1] - d[2] * yz[2] - d[3] * yz[3] - d[4] * yz[4];
         return yz[0];
     }
 
